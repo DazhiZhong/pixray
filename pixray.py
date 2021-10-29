@@ -657,6 +657,7 @@ def do_init(args):
                     CenterCrop(input_resolution),
                     ToTensor()
                 ])
+                #to device may be right hmmm
                 image_mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).cuda()
                 image_std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).cuda()
 
@@ -1027,8 +1028,8 @@ def ascend_txt(args):
             for prompt in spotOffPms:
                 result.append(prompt(iii_so))
 
+        #prompt
         iii = perceptor.encode_image(normalize( cur_cutouts[cutoutSize] )).float()
-
         pMs = pmsTable[clip_model]
         for prompt in pMs:
             result.append(prompt(iii))
@@ -1070,7 +1071,7 @@ def ascend_txt(args):
         for prompt in transient_pMs:
             result.append(prompt(iii))
 
-
+    # no spot prompt clean, why clear transform cache again?
     for cutoutSize in cutoutsTable:
         # clear the transform "cache"
         make_cutouts = cutoutsTable[cutoutSize]
@@ -1405,53 +1406,79 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-sp",   "--spot", type=str, help="Spot Text prompts", default=[], dest='spot_prompts')
     vq_parser.add_argument("-spo",  "--spot_off", type=str, help="Spot off Text prompts", default=[], dest='spot_prompts_off')
     vq_parser.add_argument("-spf",  "--spot_file", type=str, help="Custom spot file", default=None, dest='spot_file')
+    #legacy?
     vq_parser.add_argument("-l",    "--labels", type=str, help="ImageNet labels", default=[], dest='labels')
     vq_parser.add_argument("-vp",   "--vector_prompts", type=str, help="Vector prompts", default="textoff", dest='vector_prompts')
     vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts", default=[], dest='image_prompts')
     vq_parser.add_argument("-ipw",  "--image_prompt_weight", type=float, help="Weight for image prompt", default=None, dest='image_prompt_weight')
     vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
+    #legacy?
     vq_parser.add_argument("-il",   "--image_labels", type=str, help="Image prompts", default=None, dest='image_labels')
     vq_parser.add_argument("-ilw",  "--image_label_weight", type=float, help="Weight for image prompt", default=1.0, dest='image_label_weight')
+    
     vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=None, dest='iterations')
+    # save_every non functional actually i think (for single image)
     vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=10, dest='save_every')
     vq_parser.add_argument("-de",   "--display_every", type=int, help="Display image iterations", default=20, dest='display_every')
     vq_parser.add_argument("-dc",   "--display_clear", type=bool, help="Clear dispaly when updating", default=False, dest='display_clear')
     vq_parser.add_argument("-ove",  "--overlay_every", type=int, help="Overlay image iterations", default=10, dest='overlay_every')
     vq_parser.add_argument("-ovo",  "--overlay_offset", type=int, help="Overlay image iteration offset", default=0, dest='overlay_offset')
     vq_parser.add_argument("-ovi",  "--overlay_image", type=str, help="Overlay image (if not init)", default=None, dest='overlay_image')
-    vq_parser.add_argument("-qua",  "--quality", type=str, help="draft, normal, best", default="normal", dest='quality')
-    vq_parser.add_argument("-asp",  "--aspect", type=str, help="widescreen, square", default="widescreen", dest='aspect')
+    vq_parser.add_argument("-ova",  "--overlay_alpha", type=int, help="Overlay alpha (0-255)", default=None, dest='overlay_alpha')    
+    vq_parser.add_argument("-qua",  "--quality", type=str, help="draft, normal, better, best, supreme", default="normal", dest='quality')
+    vq_parser.add_argument("-asp",  "--aspect", type=str, help="widescreen, square, portrait", default="widescreen", dest='aspect')
+    # legacy?
     vq_parser.add_argument("-ezs",  "--ezsize", type=str, help="small, medium, large", default=None, dest='ezsize')
     vq_parser.add_argument("-sca",  "--scale", type=float, help="scale (instead of ezsize)", default=None, dest='scale')
-    vq_parser.add_argument("-ova",  "--overlay_alpha", type=int, help="Overlay alpha (0-255)", default=None, dest='overlay_alpha')    
     vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=None, dest='size')
     vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
     vq_parser.add_argument("-iia",  "--init_image_alpha", type=int, help="Init image alpha (0-255)", default=200, dest='init_image_alpha')
+    
     vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default="pixels", dest='init_noise')
+    # target
     vq_parser.add_argument("-ti",   "--target_images", type=str, help="Target images", default=None, dest='target_images')
+    # TODO animation 
     vq_parser.add_argument("-anim", "--animation_dir", type=str, help="Animation output dir", default=None, dest='animation_dir')    
     vq_parser.add_argument("-ana",  "--animation_alpha", type=int, help="Forward blend for consistency", default=128, dest='animation_alpha')
+    # TODO
     vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight (main=spherical)", default=None, dest='init_weight')
     vq_parser.add_argument("-iwd",  "--init_weight_dist", type=float, help="Initial weight dist loss", default=0., dest='init_weight_dist')
     vq_parser.add_argument("-iwc",  "--init_weight_cos", type=float, help="Initial weight cos loss", default=0., dest='init_weight_cos')
     vq_parser.add_argument("-iwp",  "--init_weight_pix", type=float, help="Initial weight pix loss", default=0., dest='init_weight_pix')
+    # ['RN50', 'RN101', 'RN50x4', 'RN50x16', 'ViT-B/32', 'ViT-B/16']
     vq_parser.add_argument("-m",    "--clip_models", type=str, help="CLIP model", default=None, dest='clip_models')
+    # noise prompts is simply adding a random noise to the output
     vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
     vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
+    # learning_rate, how fast it changes, straightforward
     vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.2, dest='learning_rate')
+    # percent of iterations where one learning rate drop occurs, learning rate divided by 10^drop_times
     vq_parser.add_argument("-lrd",  "--learning_rate_drops", nargs="*", type=float, help="When to drop learning rate (relative to iterations)", default=[75], dest='learning_rate_drops')
+    #incomplete arg/ legacy
     vq_parser.add_argument("-as",   "--auto_stop", type=bool, help="Auto stopping", default=False, dest='auto_stop')
+    # number of differing views that clip get on the image, differing and diverse views may lead to clip grasping it better, and getting better gradients
     vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=None, dest='num_cuts')
+    # batch/passes through ascend_txt before using the optimizer updates z or whatever parameters that we optimize for
     vq_parser.add_argument("-bats", "--batches", type=int, help="How many batches of cuts", default=1, dest='batches')
+    # legacy?
     vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
+    # control output -> use with determism
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
+    # this is to specify optimizer behavior, the optimizer is spelled in a british way, some optimizers may decrease learning rate progressively, however these are basically all adam-based optimizers, so changing them is questionable
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, or AdamP)", default='Adam', dest='optimiser')
+    # specify the output name, in the colab notebook a log is kept to avoid loss of work - every output is saved, though not every itermediate step/evaluation is
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
+    # the function saves the outputs for every iteration into /steps and then generates a video afterward from those steps, this video is still generated when keyboard interrupt is called
     vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
+    # this is for determinism, use with seed and noise prompt seeds
     vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
+    # color mapper, nn.module forward, applies effect to image prior to any loss is enables, returns image and loss
     vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
+    #thsi porbably should be in the target palette class uhhh
     vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
+    # implements custom loss, use array of strings to input loss, new losses are added to loss_class_table in start of file, import for more loss, use add_loss_class to add loss from outside / hot changes
     vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
+    # when true, the saves cutouts samples for prompt and spot prompt and spot off prompts, these are saved to current directory, the first few are zoom cutouts, which are zoomed in, and the other are wide ones, which put the image on a black background it seems that caching transforms are broken atm
     vq_parser.add_argument("-tc",  "--test_cutouts", type=bool, help="save the intermediate cutouts", default=False, dest='test_cutouts')
 
 
