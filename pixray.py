@@ -375,11 +375,12 @@ class MakeCutouts(nn.Module):
             batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
                 (self.cut_size, self.cut_size), padding_mode='zeros')
             batch = torch.cat([batch1, batch2])
-            # if cur_iteration < 2:
-            #     for j in range(4):
-            #         TF.to_pil_image(batch[j].cpu()).save(f"cached_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
-            #         j_wide = j + self.cutn_zoom
-            #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+            if test_cutouts:
+                if cur_iteration < 2:
+                    for j in range(4):
+                        TF.to_pil_image(batch[j].cpu()).save(f"cached_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+                        j_wide = j + self.cutn_zoom
+                        TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
         else:
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
             batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
@@ -388,11 +389,12 @@ class MakeCutouts(nn.Module):
             # print(batch.shape)
             self.transforms = torch.cat([transforms1, transforms2])
             ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
-            # if cur_iteration < 2:
-            #     for j in range(4):
-            #         TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
-            #         j_wide = j + self.cutn_zoom
-            #         TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+            if test_cutouts:
+                if cur_iteration < 2:
+                    for j in range(4):
+                        TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+                        j_wide = j + self.cutn_zoom
+                        TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
 
         # print(batch.shape, self.transforms.shape)
         
@@ -872,6 +874,7 @@ best_z = None
 num_loss_drop = 0
 max_loss_drops = 2
 iter_drop_delay = 20
+test_cutouts = False
 
 # session globals
 cutoutsTable = {}
@@ -1448,7 +1451,9 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
     vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
     vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
-    vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
+    vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
+    vq_parser.add_argument("-tc",  "--test_cutouts", type=bool, help="save the intermediate cutouts", default=False, dest='test_cutouts')
+
 
     return vq_parser
 
@@ -1457,6 +1462,7 @@ def process_args(vq_parser, namespace=None):
     global cur_iteration, cur_anim_index, anim_output_files, anim_cur_zs, anim_next_zs;
     global global_spot_file
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
+    global test_cutouts
 
     if namespace == None:
         # command line: use ARGV to get args
@@ -1627,6 +1633,7 @@ def process_args(vq_parser, namespace=None):
     anim_next_zs=[]
 
     global_spot_file = args.spot_file
+    test_cutouts = args.test_cutouts
 
     return args
 
