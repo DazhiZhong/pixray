@@ -18,6 +18,7 @@ import time
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
+from torchvision.utils import save_image
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
@@ -579,10 +580,11 @@ def do_init(args):
                 init_image_rgba_list.append(cur_start_image)
 
             starting_image = init_image_rgba_list[0]
-
+        
         starting_image.save("starting_image.png")
         starting_tensor = TF.to_tensor(starting_image)
         init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1
+        save_image(init_tensor,"true_init.png")
         drawer.init_from_tensor(init_tensor)
 
     else:
@@ -1403,12 +1405,15 @@ def setup_parser(vq_parser):
 
     # Add the arguments
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
+    # spot is for masking, using the spot_file as a mask to direct different prompts to different parts of the image.
     vq_parser.add_argument("-sp",   "--spot", type=str, help="Spot Text prompts", default=[], dest='spot_prompts')
     vq_parser.add_argument("-spo",  "--spot_off", type=str, help="Spot off Text prompts", default=[], dest='spot_prompts_off')
     vq_parser.add_argument("-spf",  "--spot_file", type=str, help="Custom spot file", default=None, dest='spot_file')
     #legacy?
     vq_parser.add_argument("-l",    "--labels", type=str, help="ImageNet labels", default=[], dest='labels')
+    # self-specified vector prompts, using the Prompt class, and using custom embeddings, these embeddings are the CLIP produced ones 
     vq_parser.add_argument("-vp",   "--vector_prompts", type=str, help="Vector prompts", default="textoff", dest='vector_prompts')
+    #kinda actually broken, are the calculations in the loss chain?
     vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts", default=[], dest='image_prompts')
     vq_parser.add_argument("-ipw",  "--image_prompt_weight", type=float, help="Weight for image prompt", default=None, dest='image_prompt_weight')
     vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
@@ -1440,7 +1445,7 @@ def setup_parser(vq_parser):
     # TODO animation 
     vq_parser.add_argument("-anim", "--animation_dir", type=str, help="Animation output dir", default=None, dest='animation_dir')    
     vq_parser.add_argument("-ana",  "--animation_alpha", type=int, help="Forward blend for consistency", default=128, dest='animation_alpha')
-    # TODO
+    # these are incomplete/non-functional because this actually doesn't use the original image, it uses the image already added random noise
     vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight (main=spherical)", default=None, dest='init_weight')
     vq_parser.add_argument("-iwd",  "--init_weight_dist", type=float, help="Initial weight dist loss", default=0., dest='init_weight_dist')
     vq_parser.add_argument("-iwc",  "--init_weight_cos", type=float, help="Initial weight cos loss", default=0., dest='init_weight_cos')
@@ -1613,6 +1618,7 @@ def process_args(vq_parser, namespace=None):
 
     # Split target images using the pipe character
     if args.image_prompts:
+        # TODO this is actually kinda wrong lol
         args.image_prompts = real_glob(args.image_prompts)
 
     # Split text prompts using the pipe character
