@@ -99,12 +99,15 @@ class PixelDrawer(DrawingInterface):
         parser.add_argument("--pixel_size", nargs=2, type=int, help="Pixel size (width height)", default=None, dest='pixel_size')
         parser.add_argument("--pixel_scale", type=float, help="Pixel scale", default=None, dest='pixel_scale')
         parser.add_argument("--pixel_type", type=str, help="rect, rectshift, hex, tri, diamond, knit", default="rect", dest='pixel_type')
+        parser.add_argument("--pixel_dist_opt", type=bool, help="False->pixels don't move True->pixels can move a bit (experimental)", default=False, dest='pixel_dist_opt')
         parser.add_argument("--pixel_edge_check", type=str2bool, help="ensure grid is symmetric", default=True, dest='pixel_edge_check')
         parser.add_argument("--pixel_iso_check", type=str2bool, help="ensure tri and hex shapes are w/h scaled", default=True, dest='pixel_iso_check')
         return parser
 
     def __init__(self, settings):
         super(DrawingInterface, self).__init__()
+
+        self.pixel_dist_opt = settings.pixel_dist_opt
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
@@ -278,8 +281,14 @@ class PixelDrawer(DrawingInterface):
         for group in shape_groups:
             group.fill_color.requires_grad = True
             color_vars.append(group.fill_color)
-
         self.color_vars = color_vars
+
+        if self.pixel_dist_opt:
+            point_vars = []
+            for group in shapes:
+                group.points.requires_grad = True
+                point_vars.append(group.points)
+            self.point_vars = point_vars     
 
         self.img = img
         self.shapes = shapes 
@@ -290,7 +299,11 @@ class PixelDrawer(DrawingInterface):
         # points_optim = torch.optim.Adam(points_vars, lr=1.0)
         # width_optim = torch.optim.Adam(stroke_width_vars, lr=0.1)
         color_optim = torch.optim.Adam(self.color_vars, lr=0.03/decay_divisor)
-        self.opts = [color_optim]
+        if self.pixel_dist_opt:
+            point_optim = torch.optim.Adam(self.point_vars, lr=0.03/decay_divisor)
+            self.opts = [color_optim,point_optim]
+        else:
+            self.opts = [color_optim,]
         return self.opts
 
     def reapply_from_tensor(self, new_tensor):
