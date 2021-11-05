@@ -26,6 +26,7 @@ torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead
 
 from torch_optimizer import DiffGrad, AdamP
 from perlin_numpy import generate_fractal_noise_2d
+from util import str2bool
 
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 
@@ -985,7 +986,10 @@ def ascend_txt(args):
     global pmsTargetTable
     global lossGlobals
 
-    out = drawer.synth(cur_iteration);
+    if args.transparency:
+        out, alpha = drawer.synth(cur_iteration, return_transparency=True)
+    else:
+        out = drawer.synth(cur_iteration)
 
     result = []
 
@@ -1116,6 +1120,9 @@ def ascend_txt(args):
         # used to be for palette loss - now left as an example
         'cur_iteration':cur_iteration,
     }
+
+    if args.transparency:
+        result.append(torch.mean(alpha))
     
     if args.custom_loss is not None and len(args.custom_loss)>0:
         for lossclass in args.custom_loss:
@@ -1486,7 +1493,8 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
     # when true, the saves cutouts samples for prompt and spot prompt and spot off prompts, these are saved to current directory, the first few are zoom cutouts, which are zoomed in, and the other are wide ones, which put the image on a black background it seems that caching transforms are broken atm
     vq_parser.add_argument("-tc",  "--test_cutouts", type=bool, help="save the intermediate cutouts", default=False, dest='test_cutouts')
-
+    # transperancy in pixeldraw
+    vq_parser.add_argument("--transparent", type=str2bool, help="enable transparency", default=False, dest='transparency')
 
     return vq_parser
 
@@ -1678,7 +1686,7 @@ def reset_settings():
 def add_settings(**kwargs):
     global global_pixray_settings
     for k, v in kwargs.items():
-        if v is None:
+        if v is None or v == "None":
             # just remove the key if it is there
             global_pixray_settings.pop(k, None)
         else:
