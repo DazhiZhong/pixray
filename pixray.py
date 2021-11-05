@@ -1198,7 +1198,8 @@ def train(args, cur_it):
                     else:
                         did_drop = checkdrop(args, cur_it, lossAll)
                         if args.auto_stop is True:
-                            rebuild_opts_when_done = disabl
+                            #bugfix?
+                            rebuild_opts_when_done = False
 
             if i == 0 and cur_it % args.save_every == 0:
                 checkin(args, cur_it, lossAll)
