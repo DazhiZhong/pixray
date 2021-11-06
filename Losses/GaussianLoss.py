@@ -23,8 +23,8 @@ class GaussianLoss(LossInterface):
     @staticmethod
     def add_settings(parser):
         parser.add_argument("--gaussian_weight", type=float, help="gaussian's weight", default=1, dest='gaussian_weight')
-        parser.add_argument("--gaussian_std", nargs=2 ,type=float, help="gaussian's std for both x and y", default=[40,40], dest='gaussian_std')
-        parser.add_argument("--gaussian_color", nargs=3 ,type=float, help="color for gaussian to optimize to", default=[255,255,255], dest='gaussian_color')
+        parser.add_argument("--gaussian_std", nargs=2 ,type=float, help="gaussian's std for both x and y", default=(40,40), dest='gaussian_std')
+        parser.add_argument("--gaussian_color", nargs=3 ,type=float, help="color for gaussian to optimize to", default=(255,255,255), dest='gaussian_color')
         return parser
     
 
