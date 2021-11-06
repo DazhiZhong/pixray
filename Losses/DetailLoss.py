@@ -57,7 +57,10 @@ class DetailLoss(LossInterface):
     
     @staticmethod
     def add_settings(parser):
-        parser.add_argument("-det",  "--detail_prompts", type=str, help="put in prompts to specify detail", default='', dest='detail_prompts')
+        parser.add_argument("--detail_prompts", type=str, help="put in prompts to specify detail", default='', dest='detail_prompts')
+        parser.add_argument("--detail_size_dict",nargs=2, type=int, help="how big a single window may be", default=(31,31), dest='detail_size_dict')
+        parser.add_argument("--detail_look_num", type=int, help="how many random windows to look in", default=30, dest='detail_look_num')
+        
         return parser
     
 
@@ -74,7 +77,7 @@ class DetailLoss(LossInterface):
         normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                       std=[0.26862954, 0.26130258, 0.27577711])
 
-        jit = True if float(torch.__version__[:3]) < 1.8 else False
+        jit = False
 
 
         for clip_model in args.clip_models:
@@ -116,12 +119,12 @@ class DetailLoss(LossInterface):
             # cutoutSize = cutoutSizeTable[clip_model]
 
             # sizedict = [int(i/8) for i in list(out.size())[2:4]]
-            sizedict = (31,31)
+            sizedict = args.detail_size_dict
             # torch.split(tensor_im, (3,30,30))[0].size()
             patches = out.unfold(2, *sizedict).unfold(3, *sizedict) 
             patchtest = patches.reshape([ 3,-1] +list(patches.size()[4:6]))
             allpatches = einops.rearrange(patchtest, 'c b h w -> b c h w').contiguous()
-            indices = torch.randperm(len(allpatches))[:30]
+            indices = torch.randperm(len(allpatches))[:args.detail_look_num]
             # print(indices)
             
             # print(allpatches.size(),'patches')

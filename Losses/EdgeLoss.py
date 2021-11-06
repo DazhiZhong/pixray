@@ -14,11 +14,10 @@ class EdgeLoss(LossInterface):
     
     @staticmethod
     def add_settings(parser):
-        parser.add_argument("-ed",  "--edge_thicness", nargs=4, type=int, help="this is for the thickness of the edge area (left, right, up, down) 0-pixel size", default=(10,10,10,10), dest='edge_thickness')
-        parser.add_argument("-ecol",  "--edge_color", nargs=3, type=float, help="this is the color of the specified region, in (R,G,B) 0-255", default=(255,255,255), dest='edge_color')
-        parser.add_argument("-ecw",  "--edge_color_weight", type=float, help="how much edge color is enforced", default=2, dest='edge_color_weight')
-        parser.add_argument("-gc",  "--use_global_color", type=bool, help="if you want a tendency for globally to be this color", default=False, dest='use_global_color')
-        parser.add_argument("-gcw",  "--global_color_weight", type=float, help="how much global color is enforced ", default=0.5, dest='global_color_weight')
+        parser.add_argument("--edge_thicness", nargs=4, type=int, help="this is for the thickness of the edge area (left, right, up, down) 0-pixel size", default=(10,10,10,10), dest='edge_thickness')
+        parser.add_argument("--edge_color", nargs=3, type=float, help="this is the color of the specified region, in (R,G,B) 0-255", default=(255,255,255), dest='edge_color')
+        parser.add_argument("--edge_color_weight", type=float, help="how much edge color is enforced", default=2, dest='edge_color_weight')
+        parser.add_argument("--global_color_weight", type=float, help="how much global color is enforced ", default=0.5, dest='global_color_weight')
         return parser
 
     def parse_settings(self,args):
@@ -47,7 +46,6 @@ class EdgeLoss(LossInterface):
         rloss = mseloss(out[:,:,:,rmax-right:], zers[:,:,:,rmax-right:])
         uloss = mseloss(out[:,:,:upper,left:rmax-right], zers[:,:,:upper,left:rmax-right]) 
         dloss = mseloss(out[:,:,lmax-lower:,left:rmax-right], zers[:,:,lmax-lower:,left:rmax-right]) 
-        gloss = mseloss(out[:,:,:,:], zers[:,:,:,:]) * args.global_color_weight
         # print(lloss, rloss, uloss, dloss)
         if left!=0:
             cur_loss+=lloss
@@ -57,7 +55,8 @@ class EdgeLoss(LossInterface):
             cur_loss+=uloss
         if lower!=0:
             cur_loss+=dloss
-        if args.use_global_color:
+        if args.global_color_weight:
+            gloss = mseloss(out[:,:,:,:], zers[:,:,:,:]) * args.global_color_weight
             cur_loss+=gloss
         cur_loss *= args.edge_color_weight
         # print(cur_loss,'lsiz')
