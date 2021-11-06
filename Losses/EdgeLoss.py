@@ -14,7 +14,6 @@ class EdgeLoss(LossInterface):
     
     @staticmethod
     def add_settings(parser):
-        parser.add_argument("-ec",  "--use_edge_color", type=bool, help="enabling this allows controlling colors of reigons around edges", default=False, dest='use_edge_color')
         parser.add_argument("-ed",  "--edge_thicness", nargs=4, type=int, help="this is for the thickness of the edge area (left, right, up, down) 0-pixel size", default=(10,10,10,10), dest='edge_thickness')
         parser.add_argument("-ecol",  "--edge_color", nargs=3, type=float, help="this is the color of the specified region, in (R,G,B) 0-255", default=(255,255,255), dest='edge_color')
         parser.add_argument("-ecw",  "--edge_color_weight", type=float, help="how much edge color is enforced", default=2, dest='edge_color_weight')

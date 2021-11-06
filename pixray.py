@@ -91,6 +91,7 @@ from Losses.SymmetryLoss import SymmetryLoss
 from Losses.SmoothnessLoss import SmoothnessLoss
 from Losses.DetailLoss import DetailLoss
 from Losses.EdgeLoss import EdgeLoss
+from Losses.GaussianLoss import GaussianLoss
 
 loss_class_table = {
     "palette": PaletteLoss,
@@ -99,6 +100,7 @@ loss_class_table = {
     "smoothness": SmoothnessLoss,
     "edge": EdgeLoss,
     "detail": DetailLoss,
+    "gaussian": GaussianLoss,
 }
 
 
