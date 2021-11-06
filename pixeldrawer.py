@@ -110,6 +110,9 @@ class PixelDrawer(DrawingInterface):
         super(DrawingInterface, self).__init__()
 
         self.pixel_dist_opt = settings.pixel_dist_opt
+        if settings.pixel_dist_opt:
+            print('using pixel distance optimiztion !!')
+        self.learning_rate = settings.learning_rate
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
@@ -302,9 +305,9 @@ class PixelDrawer(DrawingInterface):
         # Optimizers
         # points_optim = torch.optim.Adam(points_vars, lr=1.0)
         # width_optim = torch.optim.Adam(stroke_width_vars, lr=0.1)
-        color_optim = torch.optim.Adam(self.color_vars, lr=0.03/decay_divisor)
+        color_optim = torch.optim.Adam(self.color_vars, lr=self.learning_rate/decay_divisor)
         if self.pixel_dist_opt:
-            point_optim = torch.optim.Adam(self.point_vars, lr=0.03/decay_divisor)
+            point_optim = torch.optim.Adam(self.point_vars, lr=self.learning_rate/decay_divisor)
             self.opts = [color_optim,point_optim]
         else:
             self.opts = [color_optim,]
