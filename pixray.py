@@ -1345,6 +1345,7 @@ def do_run(args, return_display=False):
             with tqdm() as pbar:
                 while keep_going:
                     try:
+                        story_progress(args, cur_iteration, {50:"the sea in all its glory", 100:"the fire of a thousand buring suns"})
                         keep_going = train(args, cur_iteration)
                         if cur_iteration == args.iterations:
                             break
@@ -1365,6 +1366,26 @@ def do_run(args, return_display=False):
         do_video(args)
 
     return True
+
+
+def story_progress(args, cur_iter, all_stories):
+    global pmsTable, perceptors, device
+    # all stories must be a dict {10:"stry 1",20:"str 2"}
+    if cur_iter in list(all_stories.keys()):
+        cur_prompt = all_stories[cur_iter]
+        cur_prompt = [phrase.strip() for phrase in cur_prompt.split("|")]
+        for clip_model in args.clip_models:
+            pmsTable[clip_model] = []
+        for prompt in cur_prompt:
+            for clip_model in args.clip_models:
+                pMs = pmsTable[clip_model]
+                perceptor = perceptors[clip_model]
+                txt, weight, stop = parse_prompt(prompt)
+                embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+                pMs.append(Prompt(embed, weight, stop).to(device))
+        args.prompts = cur_prompt
+    return args
+
 
 def do_video(args):
     global cur_iteration
