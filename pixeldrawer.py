@@ -113,6 +113,7 @@ class PixelDrawer(DrawingInterface):
         if settings.pixel_dist_opt:
             print('using pixel distance optimiztion !!')
         self.learning_rate = settings.learning_rate
+        print(f'learning at rate {settings.learning_rate}')
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]

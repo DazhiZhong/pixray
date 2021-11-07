@@ -1381,6 +1381,8 @@ def do_run(args, return_display=False):
 def story_progress(args, cur_iter, all_stories):
     global pmsTable, perceptors, device
     # all stories must be a dict {10:"stry 1",20:"str 2"}
+    if not all_stories:
+        return args
     if cur_iter in list(all_stories.keys()):
         cur_prompt = all_stories[cur_iter]
         cur_prompt = [phrase.strip() for phrase in cur_prompt.split("|")]
