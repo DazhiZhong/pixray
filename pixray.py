@@ -827,6 +827,14 @@ def do_init(args):
     if args.custom_loss is not None and len(args.custom_loss)>0:
         for loss in args.custom_loss:
             lossGlobals.update(loss.add_globals(args))
+
+    
+    if args.story_prompts:
+        story_prompts = [phrase.strip() for phrase in args.prompts.split("^")]
+        story_dict = {}
+        for num, s_ps in enumerate(story_prompts):
+            story_dict[num*args.story_transition] = s_ps
+        args.story_prompts = story_dict
     
     
     opts = rebuild_optimisers(args)
@@ -849,6 +857,8 @@ def do_init(args):
         print('Noise prompt weights:', args.noise_prompt_weights)
     if args.custom_loss:
         print(f'using custom losses: {str(custom_loss_names)}')
+    if args.story_prompts:
+        print(f'using story prompts {str(story_dict)}')
 
     cur_iteration = 0
 
@@ -1345,7 +1355,7 @@ def do_run(args, return_display=False):
             with tqdm() as pbar:
                 while keep_going:
                     try:
-                        story_progress(args, cur_iteration, {50:"the sea in all its glory", 100:"the fire of a thousand buring suns"})
+                        story_progress(args, cur_iteration, args.story_prompts)
                         keep_going = train(args, cur_iteration)
                         if cur_iteration == args.iterations:
                             break
@@ -1438,6 +1448,9 @@ def setup_parser(vq_parser):
     # Create the parser
     # vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
+    #added
+    vq_parser.add_argument("--story_prompts", type=str, help="story prompts, seperate with ^", default="", dest='story_prompts')
+    vq_parser.add_argument("--story_transition", type=int, help="how many iters per story scene", default=100, dest='story_transition')
     # Add the arguments
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
     # spot is for masking, using the spot_file as a mask to direct different prompts to different parts of the image.
