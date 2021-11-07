@@ -305,7 +305,7 @@ class PixelDrawer(DrawingInterface):
         # Optimizers
         # points_optim = torch.optim.Adam(points_vars, lr=1.0)
         # width_optim = torch.optim.Adam(stroke_width_vars, lr=0.1)
-        color_optim = torch.optim.Adam(self.color_vars, lr=self.learning_rate/decay_divisor)
+        color_optim = torch.optim.Adam(self.color_vars, lr=self.learning_rate/10/decay_divisor)
         if self.pixel_dist_opt:
             point_optim = torch.optim.Adam(self.point_vars, lr=self.learning_rate/decay_divisor)
             self.opts = [color_optim,point_optim]

@@ -483,7 +483,7 @@ def do_init(args):
     reset_session_globals()
 
     # do seed first!
-    if args.seed is None:
+    if args.seed is None or args.seed==-1:
         seed = torch.seed()
     else:
         seed = args.seed
