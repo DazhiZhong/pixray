@@ -830,7 +830,7 @@ def do_init(args):
 
     
     if args.story_prompts:
-        story_prompts = [phrase.strip() for phrase in args.prompts.split("^")]
+        story_prompts = [phrase.strip() for phrase in args.story_prompts.split("^")]
         story_dict = {}
         for num, s_ps in enumerate(story_prompts):
             story_dict[num*args.story_transition] = s_ps
