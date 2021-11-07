@@ -1352,7 +1352,7 @@ def do_run(args, return_display=False):
     else:
         try:
             keep_going = True
-            with tqdm() as pbar:
+            with tqdm(total=args.iterations) as pbar:
                 while keep_going:
                     try:
                         story_progress(args, cur_iteration, args.story_prompts)
