@@ -807,10 +807,6 @@ def do_init(args):
         for loss in custom_losses:
             lossClass = loss_class_table[loss]
             # do special initializations here
-            if loss=='edge':
-                customloss = EdgeLoss(custom_init = "custom initialization",device=device)
-                lossClasses.append(customloss)
-                continue
             try:
                 lossClasses.append(lossClass(device=device))
             except TypeError as e:

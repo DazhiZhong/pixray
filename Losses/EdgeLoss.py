@@ -7,9 +7,7 @@ from torch import nn, optim
 from Losses.LossInterface import LossInterface
 
 class EdgeLoss(LossInterface):
-    def __init__(self,custom_init,**kwargs):
-        print(kwargs)
-        print(custom_init,"custom init 0 message :)")
+    def __init__(self,**kwargs):
         super().__init__(**kwargs)
     
     @staticmethod
@@ -26,7 +24,7 @@ class EdgeLoss(LossInterface):
             args.edge_color = (255,255,255)
         return args
     
-    def forward(self, cur_cutouts, out, args, globals=None, lossGlobals=None):
+    def get_loss(self, cur_cutouts, out, args, globals=None, lossGlobals=None):
         zers = torch.zeros(out.size()).cuda()
         # print(out.size())
         # print(out.size()[1])

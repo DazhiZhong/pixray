@@ -107,7 +107,7 @@ class DetailLoss(LossInterface):
 
 
     
-    def forward(self, cur_cutouts, out, args, globals=None, lossGlobals=None):
+    def get_loss(self, cur_cutouts, out, args, globals=None, lossGlobals=None):
         allloss = []
         d_w = 1
 
