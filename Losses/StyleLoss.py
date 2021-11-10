@@ -343,7 +343,7 @@ def scale_loss(result, content, style, scale, content_weight, lr, extractor):
     # torch.autograd.set_detect_anomaly(True)
     result_pyramid = make_laplace_pyramid(result, 5)
 
-    opt_iter = 2
+    opt_iter = 3
     # if scale == 1:
     #     opt_iter = 800
 
@@ -403,7 +403,7 @@ def strotss_loss(out_tensor, style_tensor, content_weight=1.0*16.0, extractor=No
         # rescale content to current scale
         content = tensor_resample(content_full, [ content_full.shape[2] // scale, content_full.shape[3] // scale ])
         style = tensor_resample(style_full, [ style_full.shape[2] // scale, style_full.shape[3] // scale ])
-        print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]') 
+        # print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]') 
 
         # upsample or initialize the result
         if scale == scales[0]:
@@ -459,7 +459,7 @@ if __name__ == "__main__":
 
 
 
-class SymmetryLoss(LossInterface):
+class StyleLoss(LossInterface):
     def __init__(self,**kwargs):
         self.resized = None
         super().__init__(**kwargs)
