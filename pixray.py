@@ -11,7 +11,8 @@ from braceexpand import braceexpand
 from types import SimpleNamespace
 
 import os.path
-
+from io import StringIO, BytesIO
+import pandas as pd
 from omegaconf import OmegaConf
 
 import time
@@ -127,6 +128,21 @@ else:
     from tqdm import tqdm
 
 # Functions and classes
+
+def get_free_gpu():
+    gpu_stats = subprocess.check_output(["nvidia-smi", "--format=csv", "--query-gpu=memory.used,memory.free"])
+    gpu_df = pd.read_csv(BytesIO(gpu_stats),
+                         names=['memory.used', 'memory.free'],
+                         skiprows=1)
+    # for i in gpu_df.index:
+    #     gpu_df["memory.free"][i] = int(gpu_df["memory.free"][i][:-3].strip())
+    print('GPU usage:\n{}'.format(gpu_df))
+    gpu_df['memory.free'] = gpu_df['memory.free'].map(lambda x: x.rstrip(' [MiB]'))
+    gpu_df['memory.free'] = pd.to_numeric(gpu_df['memory.free'])
+    idx = gpu_df['memory.free'].idxmax()
+    print('Returning GPU{} with {} free MiB'.format(idx, gpu_df.iloc[idx]['memory.free']))
+    return idx
+
 def sinc(x):
     return torch.where(x != 0, torch.sin(math.pi * x) / (math.pi * x), x.new_ones([]))
 
@@ -486,9 +502,7 @@ def do_init(args):
     np.random.seed(int_seed)
     random.seed(int_seed)
 
-    # set device only once
-    if device is None:
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(f'cuda:{str(get_free_gpu())}' if torch.cuda.is_available() else 'cpu')
 
     drawer = class_table[args.drawer](args)
     drawer.load_model(args, device)
