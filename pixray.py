@@ -65,6 +65,14 @@ class_table = {
 }
 
 try:
+    from fftdrawer import FftDrawer
+    # update class_table if these import OK
+    class_table.update({"fft": FftDrawer})
+except ImportError as e:
+    print("--> Not running with fft support", e)
+    pass
+
+try:
     from clipdrawer import ClipDrawer
     from pixeldrawer import PixelDrawer
     from linedrawer import LineDrawer
@@ -74,8 +82,8 @@ try:
         "pixel": PixelDrawer,
         "clipdraw": ClipDrawer
     })
-except ImportError:
-    # diffvg is not strictly required
+except ImportError as e:
+    print("--> Not running with pydiffvg drawer support ", e)
     pass
 
 try:
@@ -809,12 +817,22 @@ def do_init(args):
         custom_losses = [loss.strip() for loss in custom_losses]
         custom_loss_names = args.custom_loss
         lossClasses = []
-        for loss in custom_losses:
+        for loss_chunk in custom_losses:
+            # check for special delimiter
+            if loss_chunk.find('->') > 0:
+                parts = loss_chunk.split('->')
+                loss = parts[0]
+                instance_args = parts[1:]
+            else:
+                loss = loss_chunk
+                instance_args = []
             loss_name, weight, stop = parse_prompt(loss)
             lossClass = loss_class_table[loss_name]
             # do special initializations here
             try:
-                lossClasses.append({"loss":lossClass(device=device), "weight": weight})
+                lossInstance = lossClass(device=device)
+                lossInstance.instance_settings(instance_args)
+                lossClasses.append({"loss":lossInstance, "weight": weight})
             except TypeError as e:
                 print(f'error in initializing {lossClass} - this message is to provide information')
                 raise TypeError(e)
@@ -1130,7 +1148,7 @@ def ascend_txt(args):
     }
 
     if args.transparency:
-        result.append(torch.mean(alpha))
+        result.append(args.alpha_weight*torch.mean(alpha))
     
     if args.custom_loss is not None and len(args.custom_loss)>0:
         for t in args.custom_loss:
@@ -1217,7 +1235,7 @@ def train(args, cur_it):
                     else:
                         did_drop = checkdrop(args, cur_it, lossAll)
                         if args.auto_stop is True:
-                            rebuild_opts_when_done = disabl
+                            rebuild_opts_when_done = did_drop
 
             if i == 0 and cur_it % args.save_every == 0:
                 checkin(args, cur_it, lossAll)
@@ -1431,13 +1449,13 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-vp",   "--vector_prompts", type=str, help="Vector prompts", default="textoff", dest='vector_prompts')
     vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts", default=[], dest='image_prompts')
     vq_parser.add_argument("-ipw",  "--image_prompt_weight", type=float, help="Weight for image prompt", default=None, dest='image_prompt_weight')
-    vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
+    vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=str2bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
     vq_parser.add_argument("-il",   "--image_labels", type=str, help="Image prompts", default=None, dest='image_labels')
     vq_parser.add_argument("-ilw",  "--image_label_weight", type=float, help="Weight for image prompt", default=1.0, dest='image_label_weight')
     vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=None, dest='iterations')
     vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=10, dest='save_every')
     vq_parser.add_argument("-de",   "--display_every", type=int, help="Display image iterations", default=20, dest='display_every')
-    vq_parser.add_argument("-dc",   "--display_clear", type=bool, help="Clear dispaly when updating", default=False, dest='display_clear')
+    vq_parser.add_argument("-dc",   "--display_clear", type=str2bool, help="Clear dispaly when updating", default=False, dest='display_clear')
     vq_parser.add_argument("-ove",  "--overlay_every", type=int, help="Overlay image iterations", default=10, dest='overlay_every')
     vq_parser.add_argument("-ovo",  "--overlay_offset", type=int, help="Overlay image iteration offset", default=0, dest='overlay_offset')
     vq_parser.add_argument("-ovi",  "--overlay_image", type=str, help="Overlay image (if not init)", default=None, dest='overlay_image')
@@ -1462,19 +1480,22 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
     vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.2, dest='learning_rate')
     vq_parser.add_argument("-lrd",  "--learning_rate_drops", nargs="*", type=float, help="When to drop learning rate (relative to iterations)", default=[75], dest='learning_rate_drops')
-    vq_parser.add_argument("-as",   "--auto_stop", type=bool, help="Auto stopping", default=False, dest='auto_stop')
+    vq_parser.add_argument("-as",   "--auto_stop", type=str2bool, help="Auto stopping", default=False, dest='auto_stop')
     vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=None, dest='num_cuts')
     vq_parser.add_argument("-bats", "--batches", type=int, help="How many batches of cuts", default=1, dest='batches')
     vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, or AdamP)", default='Adam', dest='optimiser')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
-    vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
-    vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
+    vq_parser.add_argument("-vid",  "--video", type=str2bool, help="Create video frames?", default=False, dest='make_video')
+    vq_parser.add_argument("-d",    "--deterministic", type=str2bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
     vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
     vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
     vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
     vq_parser.add_argument("--transparent", type=str2bool, help="enable transparency", default=False, dest='transparency')
+    vq_parser.add_argument("--alpha_weight", type=float, help="strenght of alpha loss", default=1., dest='alpha_weight')
+    vq_parser.add_argument("--alpha_use_g", type=str2bool, help="use gaussian mask weighting", default=False, dest='alpha_use_g')
+    vq_parser.add_argument("--alpha_gamma", type=float, help="width-relative sigma for the alpha gaussian", default=4., dest='alpha_gamma')
 
     return vq_parser
 
