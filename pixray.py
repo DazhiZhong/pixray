@@ -970,7 +970,7 @@ def checkin(args, iter, losses):
     # img = drawer.to_image()
     if cur_anim_index is None:
         outfile = args.output
-        outfile = f"{outfile[:4]}_{iter:04d}{outfile[4:]}"
+        outfile = f"{outfile[:-4]}_{iter:04d}{outfile[-4:]}"
     else:
         outfile = anim_output_files[cur_anim_index]
     img.save(outfile, pnginfo=info)
