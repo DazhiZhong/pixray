@@ -17,6 +17,7 @@ scikit_learn==1.0
 scikit-image==0.18.3
 torch_optimizer==0.1.0
 torch-tools==0.1.5
+googletrans==3.0.0
 
 # diffvg
 cmake==3.21.3

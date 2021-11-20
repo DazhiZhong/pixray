@@ -1,6 +1,6 @@
 import argparse
 import math
-
+import gc
 from urllib.request import urlopen
 import sys
 import os
@@ -1505,14 +1505,9 @@ def process_args(vq_parser, namespace=None):
     global global_spot_file
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
 
-    if namespace == None:
-        # command line: use ARGV to get args
-        args = vq_parser.parse_args()
-    elif isnotebook() or hasattr(namespace, 'skip_args'):
-        args = vq_parser.parse_args(args=[], namespace=namespace)
-    else:
-        # sometimes there are both settings and cmd line
-        args = vq_parser.parse_args(namespace=namespace)        
+    print(vq_parser, namespace)
+    args = vq_parser.parse_args(args=[], namespace=namespace)        
+
 
     if args.cudnn_determinism:
         torch.backends.cudnn.deterministic = True
@@ -1556,6 +1551,7 @@ def process_args(vq_parser, namespace=None):
         'supreme': 12
     }
 
+    print('step-in-in')
     if args.quality not in quality_to_clip_models_table:
         print("Qualitfy setting not understood, aborting -> ", args.quality)
         exit(1)
@@ -1582,6 +1578,7 @@ def process_args(vq_parser, namespace=None):
         'widescreen': [192, 108]  # vqgan trims to 192x96, 384x208, 576x320, 768x432, 960x528, 1152x640, etc
     }
 
+    print('step-in-in')
     # determine size if not set
     if args.size is None:
         size_scale = args.scale
@@ -1601,7 +1598,8 @@ def process_args(vq_parser, namespace=None):
             exit(1)
 
     global_aspect_width = args.size[0] / args.size[1]
-
+    
+    print('step-in-in')
     if args.init_noise.lower() == "none":
         args.init_noise = None
 
@@ -1654,6 +1652,7 @@ def process_args(vq_parser, namespace=None):
         if not os.path.exists('steps'):
             os.mkdir('steps')
 
+    print('step-in-in')
     if args.learning_rate_drops is None:
         args.learning_rate_drops = []
     else:
@@ -1674,7 +1673,7 @@ def process_args(vq_parser, namespace=None):
     anim_next_zs=[]
 
     global_spot_file = args.spot_file
-
+    print('step-in-in')
     return args
 
 def reset_settings():
@@ -1700,32 +1699,48 @@ def apply_settings():
 
     # first pass - just get the drawer
     # Create the parser
-    vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
+
+    vq_parser = argparse.ArgumentParser(prog="pixray",description='Image generation using VQGAN+CLIP')
+
     vq_parser.add_argument("--drawer", type=str, help="clipdraw, pixel, etc", default="vqgan", dest='drawer')
+
     settingsDict = SimpleNamespace(**global_pixray_settings)
+
     settings_core, unknown = vq_parser.parse_known_args(namespace=settingsDict)
 
     vq_parser = setup_parser(vq_parser)
+
     class_table[settings_core.drawer].add_settings(vq_parser)
+
 
     # TODO: this is slighly sloppy and better would be to add settings of loss functions
     # actually used, not all of those available.
     for n,l in loss_class_table.items():
         l.add_settings(vq_parser)
+    
+    print("ohwowman")
+    # print(vq_parser._actions)
+    print(vq_parser._actions[20])
+    print(vq_parser._actions[20].type)
+    print(vq_parser._actions[20].type(10000))
+    print(dir(vq_parser._actions[20]))
 
     if len(global_pixray_settings) > 0:
         # check for any bogus entries in the settings
         dests = [d.dest for d in vq_parser._actions]
+        index = {d.dest:i for i,d in enumerate(vq_parser._actions)}
         for k in global_pixray_settings:
             if not k in dests and k != "skip_args":
                 raise ValueError(f"Requested setting not found, aborting: {k}={global_pixray_settings[k]}")
-
+            elif k!="skip_args":
+                global_pixray_settings[k] = vq_parser._actions[index[k]].type(global_pixray_settings[k])
         # convert dictionary to easyDict
         # which can be used as an argparse namespace instead
         # settingsDict = easydict.EasyDict(global_pixray_settings)
         settingsDict = SimpleNamespace(**global_pixray_settings)
 
     settings = process_args(vq_parser, settingsDict)
+
     return settings
 
 def add_custom_loss(name, customloss):
@@ -1746,6 +1761,57 @@ def main():
     settings = apply_settings()    
     do_init(settings)
     do_run(settings)
+
+def release():
+    global z_orig , im_targets , z_labels , opts , drawer , color_mapper , normalize , init_image_tensor , target_image_tensor , pmsTable , spotPmsTable , spotOffPmsTable , pmsImageTable , pmsTargetTable , gside_X, gside_Y, init_image_rgba_list, overlay_image_rgba_list, overlay_image_rgba, cur_iteration, cur_anim_index, anim_output_files, anim_cur_zs, anim_next_zs, best_loss , best_iter , best_z , num_loss_drop , max_loss_drops , iter_drop_delay , cutoutsTable , cutoutSizeTable , perceptors , device, lossGlobals
+    global clip, class_table
+    for i,j in class_table.items():
+        del j
+    del clip
+    del z_orig 
+    del im_targets 
+    del z_labels 
+    del opts 
+    del drawer 
+    del color_mapper 
+    del normalize 
+    del init_image_tensor 
+    del target_image_tensor 
+    del pmsTable 
+    del spotPmsTable 
+    del spotOffPmsTable 
+    del pmsImageTable 
+    del pmsTargetTable 
+    del gside_X
+    del gside_Y
+    del init_image_rgba_list
+    del overlay_image_rgba_list
+    del overlay_image_rgba
+    del cur_iteration
+    del cur_anim_index
+    del anim_output_files
+    del anim_cur_zs
+    del anim_next_zs
+    del best_loss 
+    del best_iter 
+    del best_z 
+    del num_loss_drop 
+    del max_loss_drops 
+    del iter_drop_delay 
+
+    # session globals
+    del cutoutsTable 
+    del cutoutSizeTable 
+
+    # persistent globals
+    del perceptors 
+    del device
+
+    #loss globals
+    del lossGlobals 
+    
+    torch.cuda.empty_cache()
+    gc.collect()
 
 if __name__ == '__main__':
     main()
