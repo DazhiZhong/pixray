@@ -995,6 +995,7 @@ def checkin(args, iter, losses):
     # img = drawer.to_image()
     if cur_anim_index is None:
         outfile = args.output
+        outfile = f"{outfile[:-4]}_{iter:04d}{outfile[-4:]}"
     else:
         outfile = anim_output_files[cur_anim_index]
     img.save(outfile, pnginfo=info)
@@ -1251,6 +1252,11 @@ def train(args, cur_it):
 
         for opt in opts:
             opt.step()
+        
+
+        if cur_it == args.iterations-1:
+            dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args)
+            
 
         drawer.clip_z()
 
@@ -1447,6 +1453,7 @@ def setup_parser(vq_parser):
     # vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
     # Add the arguments
+    vq_parser.add_argument("--style_image", type=str, help="style_image", default="", dest='style_image')
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
     vq_parser.add_argument("-sp",   "--spot", type=str, help="Spot Text prompts", default=[], dest='spot_prompts')
     vq_parser.add_argument("-spo",  "--spot_off", type=str, help="Spot off Text prompts", default=[], dest='spot_prompts_off')
@@ -1758,6 +1765,49 @@ def main():
     settings = apply_settings()    
     do_init(settings)
     do_run(settings)
+
+
+from types import SimpleNamespace
+from strotss import *
+def dostrotss(out, opt, drawer, iters, settings_args):
+    global device
+    print(out)  
+    print(out.grad_fn)
+    out = out.detach()
+    print(out)
+    print(out.grad_fn)
+    
+    args = {
+        "content": "content1.jpg",
+        "style": settings_args.style_image,
+        "weight": 2.0,
+        "output": "strotss.png",
+        "device": device,
+        "ospace": "uniform",
+        "resize_to": 512
+    }
+    args = SimpleNamespace(**args)
+
+
+    content_weight = args.weight * 16.0
+
+    device = args.device
+
+
+    filelist = real_glob(args.style)
+    style_pil = [Image.open(f) for f in filelist][0]
+        
+    style_resized = TF.to_tensor(style_pil).to(device).unsqueeze(0)
+    style_resized = TF.resize(style_resized, out.size()[2:4],TF.InterpolationMode.BICUBIC)
+    print(style_resized.grad_fn)
+ 
+
+    start = time()
+    result = strotss(out, style_resized, content_weight, device, args.ospace, opt, drawer, iters)
+    result.save(args.output)
+    print(f'Done in {time()-start:.3f}s')
+
+
 
 if __name__ == '__main__':
     main()
