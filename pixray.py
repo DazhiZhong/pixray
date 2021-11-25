@@ -1256,6 +1256,9 @@ def train(args, cur_it):
 
         if cur_it == args.iterations-1:
             dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args)
+            args.learning_rate = 0.00001
+
+
             
 
         drawer.clip_z()
