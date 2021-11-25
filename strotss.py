@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
+import torchvision.transforms.functional as TF
 from torchvision.utils import save_image
 import numpy as np
 import os
@@ -11,28 +12,33 @@ import math
 import PIL
 from time import time
 from argparse import ArgumentParser
-
-import torch
-from torch import nn, optim
-from Losses.LossInterface import LossInterface
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torchvision.models as models
-import torchvision.transforms as transforms
-import torchvision.transforms.functional as TF
-import numpy as np
-import os
-import math
-import PIL
 from PIL import Image
-from time import time
-from argparse import ArgumentParser
 from util import real_glob
 from urllib.request import urlopen
-from tqdm import tqdm
+
+def isnotebook():
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'Shell':
+            return True   # Seems to be what co-lab does
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False      # Probably standard Python interpreter
+
+IS_NOTEBOOK = isnotebook()
+
+if IS_NOTEBOOK:
+    from IPython import display
+    from tqdm.notebook import tqdm
+    from IPython.display import clear_output
+else:
+    from tqdm import tqdm
+
 
 class Vgg16_Extractor(nn.Module):
     def __init__(self, space):
