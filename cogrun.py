@@ -1,7 +1,6 @@
 import cog
 from pathlib import Path
 import torch
-import pixray
 import yaml
 import pathlib
 import os
@@ -25,6 +24,8 @@ class BasePixrayPredictor(cog.Predictor):
     @cog.input("settings", type=str, help="Default settings to use")
     @cog.input("prompts", type=str, help="Text Prompts")
     def predict(self, settings, **kwargs):
+        # workaround for import issue when deploying
+        import pixray
         """Run a single prediction on the model"""
         print("---> BasePixrayPredictor Predict")
         os.environ['TORCH_HOME'] = 'models/'
@@ -87,3 +88,36 @@ class PixrayRaw(BasePixrayPredictor):
             # no settings
             ydict = {}
         yield from super().predict(settings="pixrayraw", prompts=prompts, **ydict)
+
+class PixrayApi(BasePixrayPredictor):
+    @cog.input("settings", type=str, help="yaml settings", default='\n')
+    def predict(self, settings):
+        ydict = yaml.safe_load(settings)
+        if ydict == None:
+            # no settings
+            ydict = {}
+        yield from super().predict(settings="pixrayapi", **ydict)
+
+class Tiler(BasePixrayPredictor):
+    @cog.input("prompts", type=str, help="text prompt", default="Beautiful marble texture")
+    @cog.input("pixelart", type=bool, help="pixelart style?", default=True)
+    @cog.input("mirror", type=bool, help="shifted pattern?", default=True)
+    @cog.input("settings", type=str, help="yaml settings", default='\n')
+    def predict(self, prompts, pixelart, mirror, settings):
+        ydict = yaml.safe_load(settings)
+        if ydict == None:
+            # no settings
+            ydict = {}
+        if pixelart:
+            if mirror:
+                settings = "tiler_pixel_shift"
+            else:
+                settings = "tiler_pixel"
+            yield from super().predict(prompts=f"{prompts} #pixelart", settings=settings, **ydict)
+        else:
+            if mirror:
+                settings = "tiler_fft_shift"
+            else:
+                settings = "tiler_fft"
+            yield from super().predict(prompts=prompts, settings=settings, **ydict)    
+

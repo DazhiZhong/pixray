@@ -21,6 +21,7 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
+from torchvision.utils import save_image
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
 #torch.use_deterministic_algorithms(True)		# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
@@ -46,7 +47,13 @@ import random
 
 from einops import rearrange
 
-from colorlookup import ColorLookup
+from filters.colorlookup import ColorLookup
+from filters.wallpaper import WallpaperFilter
+
+filters_class_table = {
+    "lookup": ColorLookup,
+    "wallpaper": WallpaperFilter,
+}
 
 from PIL import ImageFile, Image, PngImagePlugin
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -550,9 +557,10 @@ def do_init(args):
             make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow)
             cutoutsTable[cut_size] = make_cutouts
 
+    color_mapper = None
     if args.color_mapper is not None:
-        if args.color_mapper == "lookup":
-            color_mapper = ColorLookup(args.target_palette, device=device)
+        if args.color_mapper in filters_class_table:
+            color_mapper = filters_class_table[args.color_mapper](args, device=device)
         else:
             print(f"Color mapper {args.color_mapper} not understood")
             sys.exit(1)
@@ -604,9 +612,13 @@ def do_init(args):
 
             starting_image = init_image_rgba_list[0]
 
+            save_image(init_image_tensor,"init_image_tensor.png")
+            drawer.init_from_tensor(init_image_tensor)
+            z_orig = drawer.get_z_copy()
+
         starting_image.save("starting_image.png")
         starting_tensor = TF.to_tensor(starting_image)
-        init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1
+        init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1 # im not sure why?
         drawer.init_from_tensor(init_tensor)
 
     else:
@@ -721,7 +733,8 @@ def do_init(args):
         image_embeddings /= image_embeddings.norm()
         z_labels.append(image_embeddings.unsqueeze(0))
 
-    z_orig = drawer.get_z_copy()
+    if z_orig is not None:
+        z_orig = drawer.get_z_copy()
 
     normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                       std=[0.26862954, 0.26130258, 0.27577711])
@@ -733,7 +746,16 @@ def do_init(args):
             pMs = pmsTable[clip_model]
             perceptor = perceptors[clip_model]
             txt, weight, stop = parse_prompt(prompt)
-            embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+            if txt[0] == '=':
+                # hack for now to test pseudo encode shim
+                txt = txt[1:]
+                print(f"--> {clip_model} encoding {txt} with stops")
+                actual_tokens = clip.tokenize(txt).to(device)
+                stops = actual_tokens.argmax(dim=-1) - 1
+                embed = perceptor.encode_text(actual_tokens, stops).float()
+            else:
+                print(f"--> {clip_model} normal encoding {txt}")
+                embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
             pMs.append(Prompt(embed, weight, stop).to(device))
     
 
@@ -1121,11 +1143,11 @@ def ascend_txt(args):
         f = drawer.get_z().reshape(1,-1)
         f2 = z_orig.reshape(1,-1)
         cur_loss = spherical_dist_loss(f, f2) * args.init_weight
-        result.append(cur_loss)
+        result.append(cur_loss[0])
 
     # these three init_weight variants offer mse_loss, mse_loss in pixel space, and cos loss
     if args.init_weight_dist:
-        cur_loss = F.mse_loss(z, z_orig) * args.init_weight_dist / 2
+        cur_loss = F.mse_loss(drawer.get_z(), z_orig) * args.init_weight_dist / 2
         result.append(cur_loss)
 
     if args.init_weight_pix:
@@ -1489,9 +1511,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
     vq_parser.add_argument("-vid",  "--video", type=str2bool, help="Create video frames?", default=False, dest='make_video')
     vq_parser.add_argument("-d",    "--deterministic", type=str2bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
-    vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
-    vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
-    vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
+    vq_parser.add_argument("--palette", "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
     vq_parser.add_argument("--transparent", type=str2bool, help="enable transparency", default=False, dest='transparency')
     vq_parser.add_argument("--alpha_weight", type=float, help="strenght of alpha loss", default=1., dest='alpha_weight')
     vq_parser.add_argument("--alpha_use_g", type=str2bool, help="use gaussian mask weighting", default=False, dest='alpha_use_g')
@@ -1697,13 +1717,14 @@ def apply_settings():
     global global_pixray_settings
     settingsDict = None
 
-    # first pass - just get the drawer
+    # first pass - only add things here that can trigger other parser additions (drawers, filters, losses)
     # Create the parser
 
     vq_parser = argparse.ArgumentParser(prog="pixray",description='Image generation using VQGAN+CLIP')
 
     vq_parser.add_argument("--drawer", type=str, help="clipdraw, pixel, etc", default="vqgan", dest='drawer')
-
+    vq_parser.add_argument("--filters", "--color_mapper", type=str, help="Image Filtering", default=None, dest='color_mapper')
+    vq_parser.add_argument("--losses", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
     settingsDict = SimpleNamespace(**global_pixray_settings)
 
     settings_core, unknown = vq_parser.parse_known_args(namespace=settingsDict)
@@ -1712,18 +1733,16 @@ def apply_settings():
 
     class_table[settings_core.drawer].add_settings(vq_parser)
 
+    if settings_core.color_mapper is not None:
+        filters_class_table[settings_core.color_mapper].add_settings(vq_parser)
 
-    # TODO: this is slighly sloppy and better would be to add settings of loss functions
-    # actually used, not all of those available.
-    for n,l in loss_class_table.items():
-        l.add_settings(vq_parser)
-    
-    print("ohwowman")
-    # print(vq_parser._actions)
-    print(vq_parser._actions[20])
-    print(vq_parser._actions[20].type)
-    print(vq_parser._actions[20].type(10000))
-    print(dir(vq_parser._actions[20]))
+    if settings_core.custom_loss is not None:
+        # probably should DRY but...
+        custom_losses = settings_core.custom_loss.split(",")
+        custom_losses = [loss.strip() for loss in custom_losses]
+        for l in custom_losses:
+            l = l.split(':')[0]
+            loss_class_table[l].add_settings(vq_parser)
 
     if len(global_pixray_settings) > 0:
         # check for any bogus entries in the settings
@@ -1761,6 +1780,8 @@ def main():
     settings = apply_settings()    
     do_init(settings)
     do_run(settings)
+    # global drawer
+    # drawer.to_svg()
 
 def release():
     global z_orig , im_targets , z_labels , opts , drawer , color_mapper , normalize , init_image_tensor , target_image_tensor , pmsTable , spotPmsTable , spotOffPmsTable , pmsImageTable , pmsTargetTable , gside_X, gside_Y, init_image_rgba_list, overlay_image_rgba_list, overlay_image_rgba, cur_iteration, cur_anim_index, anim_output_files, anim_cur_zs, anim_next_zs, best_loss , best_iter , best_z , num_loss_drop , max_loss_drops , iter_drop_delay , cutoutsTable , cutoutSizeTable , perceptors , device, lossGlobals
