@@ -1610,6 +1610,13 @@ def process_args(vq_parser, namespace=None):
             base_width = int(size_scale * base_size[0])
             base_height = int(size_scale * base_size[1])
             args.size = [base_width, base_height]
+        elif args.aspect =="retain" and args.init_image is not None:
+            img_pil = Image.open(real_glob(args.init_image)[0])
+            w,h = img_pil.size
+            asp = h/w #w is base
+            h = int(144*asp*size_scale)
+            w = int(144*size_scale)
+            args.size = [w,h]
         else:
             print("aspect not understood, aborting -> ", args.aspect)
             exit(1)
@@ -1774,14 +1781,9 @@ from types import SimpleNamespace
 from strotss import *
 def dostrotss(out, opt, drawer, iters, settings_args):
     global device
-    print(out)  
-    print(out.grad_fn)
     out = out.detach()
-    print(out)
-    print(out.grad_fn)
     
     args = {
-        "content": "content1.jpg",
         "style": settings_args.style_image,
         "weight": 2.0,
         "output": "strotss.png",
@@ -1802,7 +1804,7 @@ def dostrotss(out, opt, drawer, iters, settings_args):
         
     style_resized = TF.to_tensor(style_pil).to(device).unsqueeze(0)
     style_resized = TF.resize(style_resized, out.size()[2:4],TF.InterpolationMode.BICUBIC)
-    print(style_resized.grad_fn)
+    style_resized=style_resized[:,:3,:,:] # remove alpha
  
 
     start = time()
