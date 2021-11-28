@@ -94,6 +94,18 @@ def knit_from_corners(p0, p1):
     return pts
 
 shift_pixel_types = ["hex", "rectshift", "diamond"]
+   
+def gkern(size, gamma):
+    """
+    creates gaussian kernel with side length `l` and a sigma of `sig`
+    https://stackoverflow.com/a/43346070/6028830
+    """
+    sig = size/gamma
+    ax = np.linspace(-(size - 1) / 2., (size - 1) / 2., size)
+    gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
+    kernel = -np.outer(gauss, gauss)
+    kernel = (kernel-kernel.min()) / (kernel.max()-kernel.min())
+    return kernel * (size**2) / np.sum(kernel) # normalize such that the sum of pixel was the same as the original
 
 class PixelDrawer(DrawingInterface):
     @staticmethod
@@ -172,6 +184,11 @@ class PixelDrawer(DrawingInterface):
                     self.num_rows = self.num_rows + 1
 
         self.transparency = settings.transparency
+        if self.transparency:
+            if settings.alpha_use_g:
+                self.gkern = torch.tensor(gkern(self.canvas_width, settings.alpha_gamma))
+            else:
+                self.gkern = None
 
     def load_model(self, settings, device):
         # gamma = 1.0
@@ -187,7 +204,7 @@ class PixelDrawer(DrawingInterface):
     def rand_init(self, toksX, toksY):
         self.init_from_tensor(None)
 
-    def init_from_tensor(self, init_tensor):
+    def encode_image(self, init_tensor):
         # print("----> SHAPE", self.num_rows, self.num_cols)
         canvas_width, canvas_height = self.canvas_width, self.canvas_height
         num_rows, num_cols = self.num_rows, self.num_cols
@@ -257,6 +274,7 @@ class PixelDrawer(DrawingInterface):
                         print("WTF", error)
                         mono_color = random.random()
                         cell_color = torch.tensor([mono_color, mono_color, mono_color, 1.0])
+                        raise error
                 colors.append(cell_color)
                 p0 = [cur_x, cur_y]
                 p1 = [cur_x+cell_width, cur_y+cell_height]
@@ -315,7 +333,9 @@ class PixelDrawer(DrawingInterface):
         return self.opts
 
     def reapply_from_tensor(self, new_tensor):
-        self.init_from_tensor(new_tensor)
+        color_vars, *_ = self.encode_image(new_tensor)
+        for old_color_var, new_color_var in zip(self.color_vars, color_vars):
+            old_color_var.data = new_color_var.data
 
     def get_z_from_tensor(self, ref_tensor):
         return None
@@ -342,7 +362,7 @@ class PixelDrawer(DrawingInterface):
         if return_transparency:
             res = [1,2,4,8,16][random.randint(0,4)] # resolution of the perlin noise
             noise = generate_fractal_noise_3d((img_h, img_w, 3), (res, res, 1))
-            img = alpha * img[:, :, :3] + (1 - alpha) * torch.tensor(noise, dtype=torch.float32, device = self.device)
+            img = alpha * img[:, :, :3] + (1 - alpha) * torch.tensor(noise, dtype=torch.float32, device=self.device)
         else:
             img = alpha * img[:, :, :3]
         
@@ -355,7 +375,10 @@ class PixelDrawer(DrawingInterface):
         self.img = img
 
         if return_transparency:
-            return img, alpha
+            if self.gkern is not None:
+                return img, alpha*self.gkern.to(self.device) # weight by the gaussian mask
+            else:
+                return img, alpha
         else:
             return img
 
@@ -375,13 +398,19 @@ class PixelDrawer(DrawingInterface):
                 group.fill_color.data[3].clamp_(0.0 if self.transparency else 1.0, 1.0)
 
     def get_z(self):
-        return None
+        groups = []
+        for g in self.shape_groups:
+            groups.append(g.fill_color.data)
+        groups =  torch.stack(groups)
+        groups.requires_grad_()
+        return groups
 
     def get_z_copy(self):
         shape_groups_copy = []
         for group in self.shape_groups:
             group_copy = torch.clone(group.fill_color.data)
             shape_groups_copy.append(group_copy)
+        shape_groups_copy = torch.stack(shape_groups_copy)
         return shape_groups_copy
 
     def set_z(self, new_z):

@@ -21,6 +21,7 @@ from torch.nn import functional as F
 from torchvision.utils import save_image
 from torchvision import transforms
 from torchvision.transforms import functional as TF
+from torchvision.utils import save_image
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
 #torch.use_deterministic_algorithms(True)		# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
@@ -46,7 +47,13 @@ import random
 
 from einops import rearrange
 
-from colorlookup import ColorLookup
+from filters.colorlookup import ColorLookup
+from filters.wallpaper import WallpaperFilter
+
+filters_class_table = {
+    "lookup": ColorLookup,
+    "wallpaper": WallpaperFilter,
+}
 
 from PIL import ImageFile, Image, PngImagePlugin
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -65,6 +72,14 @@ class_table = {
 }
 
 try:
+    from fftdrawer import FftDrawer
+    # update class_table if these import OK
+    class_table.update({"fft": FftDrawer})
+except ImportError as e:
+    print("--> Not running with fft support", e)
+    pass
+
+try:
     from clipdrawer import ClipDrawer
     from pixeldrawer import PixelDrawer
     from linedrawer import LineDrawer
@@ -74,8 +89,8 @@ try:
         "pixel": PixelDrawer,
         "clipdraw": ClipDrawer
     })
-except ImportError:
-    # diffvg is not strictly required
+except ImportError as e:
+    print("--> Not running with pydiffvg drawer support ", e)
     pass
 
 try:
@@ -501,9 +516,10 @@ def do_init(args):
     drawer.load_model(args, device)
     num_resolutions = drawer.get_num_resolutions()
     # print("-----------> NUMR ", num_resolutions)
+    #as of torch 1.8, jit produces errors. The below code no longer works with 1.10
+    #jit = True if float(torch.__version__[:3]) < 1.8 else False
+    jit = False
 
-    jit = True if float(torch.__version__[:3]) < 1.8 else False
-    
     if num_resolutions!=None:
         f = 2**(num_resolutions - 1)
         toksX, toksY = args.size[0] // f, args.size[1] // f
@@ -535,8 +551,8 @@ def do_init(args):
             cutoutsTable[cut_size] = make_cutouts
 
     if args.color_mapper is not None:
-        if args.color_mapper == "lookup":
-            color_mapper = ColorLookup(args.target_palette, device=device)
+        if args.color_mapper in filters_class_table:
+            color_mapper = filters_class_table[args.color_mapper](args, device=device)
         else:
             print(f"Color mapper {args.color_mapper} not understood")
             sys.exit(1)
@@ -587,11 +603,14 @@ def do_init(args):
                 init_image_rgba_list.append(cur_start_image)
 
             starting_image = init_image_rgba_list[0]
-        
+
+            save_image(init_image_tensor,"init_image_tensor.png")
+            drawer.init_from_tensor(init_image_tensor)
+            z_orig = drawer.get_z_copy()
+
         starting_image.save("starting_image.png")
         starting_tensor = TF.to_tensor(starting_image)
-        init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1
-        save_image(init_tensor,"true_init.png")
+        init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1 # im not sure why?
         drawer.init_from_tensor(init_tensor)
 
     else:
@@ -707,7 +726,8 @@ def do_init(args):
         image_embeddings /= image_embeddings.norm()
         z_labels.append(image_embeddings.unsqueeze(0))
 
-    z_orig = drawer.get_z_copy()
+    if z_orig is not None:
+        z_orig = drawer.get_z_copy()
 
     normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                       std=[0.26862954, 0.26130258, 0.27577711])
@@ -719,7 +739,16 @@ def do_init(args):
             pMs = pmsTable[clip_model]
             perceptor = perceptors[clip_model]
             txt, weight, stop = parse_prompt(prompt)
-            embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+            if txt[0] == '=':
+                # hack for now to test pseudo encode shim
+                txt = txt[1:]
+                print(f"--> {clip_model} encoding {txt} with stops")
+                actual_tokens = clip.tokenize(txt).to(device)
+                stops = actual_tokens.argmax(dim=-1) - 1
+                embed = perceptor.encode_text(actual_tokens, stops).float()
+            else:
+                print(f"--> {clip_model} normal encoding {txt}")
+                embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
             pMs.append(Prompt(embed, weight, stop).to(device))
     
 
@@ -801,14 +830,24 @@ def do_init(args):
     if args.custom_loss is not None:
         custom_losses = args.custom_loss.split(",")
         custom_losses = [loss.strip() for loss in custom_losses]
-
         custom_loss_names = args.custom_loss
         lossClasses = []
-        for loss in custom_losses:
-            lossClass = loss_class_table[loss]
+        for loss_chunk in custom_losses:
+            # check for special delimiter
+            if loss_chunk.find('->') > 0:
+                parts = loss_chunk.split('->')
+                loss = parts[0]
+                instance_args = parts[1:]
+            else:
+                loss = loss_chunk
+                instance_args = []
+            loss_name, weight, stop = parse_prompt(loss)
+            lossClass = loss_class_table[loss_name]
             # do special initializations here
             try:
-                lossClasses.append(lossClass(device=device))
+                lossInstance = lossClass(device=device)
+                lossInstance.instance_settings(instance_args)
+                lossClasses.append({"loss":lossInstance, "weight": weight})
             except TypeError as e:
                 print(f'error in initializing {lossClass} - this message is to provide information')
                 raise TypeError(e)
@@ -816,13 +855,13 @@ def do_init(args):
 
     #Loss args parse
     if args.custom_loss:
-        for loss in args.custom_loss:
-            args = loss.parse_settings(args)
+        for t in args.custom_loss:
+            args = t["loss"].parse_settings(args)
 
     #adding globals for loss
     if args.custom_loss is not None and len(args.custom_loss)>0:
-        for loss in args.custom_loss:
-            lossGlobals.update(loss.add_globals(args))
+        for t in args.custom_loss:
+            lossGlobals.update(t["loss"].add_globals(args))
 
     
     if args.story_prompts:
@@ -975,6 +1014,7 @@ def checkin(args, iter, losses):
     # img = drawer.to_image()
     if cur_anim_index is None:
         outfile = args.output
+        outfile = f"{outfile[:-4]}_{iter:04d}{outfile[-4:]}"
     else:
         outfile = anim_output_files[cur_anim_index]
     img.save(outfile, pnginfo=info)
@@ -1107,11 +1147,11 @@ def ascend_txt(args):
         f = drawer.get_z().reshape(1,-1)
         f2 = z_orig.reshape(1,-1)
         cur_loss = spherical_dist_loss(f, f2) * args.init_weight
-        result.append(cur_loss)
+        result.append(cur_loss[0])
 
     # these three init_weight variants offer mse_loss, mse_loss in pixel space, and cos loss
     if args.init_weight_dist:
-        cur_loss = F.mse_loss(z, z_orig) * args.init_weight_dist / 2
+        cur_loss = F.mse_loss(drawer.get_z(), z_orig) * args.init_weight_dist / 2
         result.append(cur_loss)
 
     if args.init_weight_pix:
@@ -1134,15 +1174,19 @@ def ascend_txt(args):
     }
 
     if args.transparency:
-        result.append(torch.mean(alpha))
+        result.append(args.alpha_weight*torch.mean(alpha))
     
     if args.custom_loss is not None and len(args.custom_loss)>0:
-        for lossclass in args.custom_loss:
+        for t in args.custom_loss:
+            lossclass = t["loss"]
+            lossweight = t["weight"]
             new_losses = lossclass.get_loss(cur_cutouts, out, args, globals = needed_globals, lossGlobals = lossGlobals)
             if type(new_losses) is not list and type(new_losses) is not tuple:
-                result.append(new_losses)
+                result.append(lossweight * new_losses)
             else:
-                result += new_losses
+                # warning: this path might be untested by current losses?
+                weighted_losses = [(lossweight * l) for l in new_losses]
+                result += weighted_losses
 
     if args.make_video:    
         img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
@@ -1160,7 +1204,7 @@ def re_average_z(args):
     cur_z_image = cur_z_image.convert('RGB')
     if overlay_image_rgba:
         # print("applying overlay image")
-        cur_z_image.paste(overlay_image_rgba, (0, 0), overlay_image_rgba)
+        cur_z_image.paste(overlay_image_rgba, (0, 0), mask=overlay_image_rgba)
         # cur_z_image.save("overlaid.png")
     cur_z_image = cur_z_image.resize((gside_X, gside_Y), Image.LANCZOS)
     drawer.reapply_from_tensor(TF.to_tensor(cur_z_image).to(device).unsqueeze(0) * 2 - 1)
@@ -1217,8 +1261,7 @@ def train(args, cur_it):
                     else:
                         did_drop = checkdrop(args, cur_it, lossAll)
                         if args.auto_stop is True:
-                            #bugfix?
-                            rebuild_opts_when_done = False
+                            rebuild_opts_when_done = did_drop
 
             if i == 0 and cur_it % args.save_every == 0:
                 checkin(args, cur_it, lossAll)
@@ -1228,6 +1271,14 @@ def train(args, cur_it):
 
         for opt in opts:
             opt.step()
+        
+
+        if cur_it == args.iterations-1:
+            dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args)
+            args.learning_rate = 0.00001
+
+
+            
 
         drawer.clip_z()
 
@@ -1449,6 +1500,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("--story_prompts", type=str, help="story prompts, seperate with ^", default="", dest='story_prompts')
     vq_parser.add_argument("--story_transition", type=int, help="how many iters per story scene", default=100, dest='story_transition')
     # Add the arguments
+    vq_parser.add_argument("--style_image", type=str, help="style_image", default="", dest='style_image')
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
     # spot is for masking, using the spot_file as a mask to direct different prompts to different parts of the image.
     vq_parser.add_argument("-sp",   "--spot", type=str, help="Spot Text prompts", default=[], dest='spot_prompts')
@@ -1461,7 +1513,7 @@ def setup_parser(vq_parser):
     #kinda actually broken, are the calculations in the loss chain?
     vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts", default=[], dest='image_prompts')
     vq_parser.add_argument("-ipw",  "--image_prompt_weight", type=float, help="Weight for image prompt", default=None, dest='image_prompt_weight')
-    vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
+    vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=str2bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
     #legacy?
     vq_parser.add_argument("-il",   "--image_labels", type=str, help="Image prompts", default=None, dest='image_labels')
     vq_parser.add_argument("-ilw",  "--image_label_weight", type=float, help="Weight for image prompt", default=1.0, dest='image_label_weight')
@@ -1470,7 +1522,7 @@ def setup_parser(vq_parser):
     # save_every non functional actually i think (for single image)
     vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=10, dest='save_every')
     vq_parser.add_argument("-de",   "--display_every", type=int, help="Display image iterations", default=20, dest='display_every')
-    vq_parser.add_argument("-dc",   "--display_clear", type=bool, help="Clear dispaly when updating", default=False, dest='display_clear')
+    vq_parser.add_argument("-dc",   "--display_clear", type=str2bool, help="Clear dispaly when updating", default=False, dest='display_clear')
     vq_parser.add_argument("-ove",  "--overlay_every", type=int, help="Overlay image iterations", default=10, dest='overlay_every')
     vq_parser.add_argument("-ovo",  "--overlay_offset", type=int, help="Overlay image iteration offset", default=0, dest='overlay_offset')
     vq_parser.add_argument("-ovi",  "--overlay_image", type=str, help="Overlay image (if not init)", default=None, dest='overlay_image')
@@ -1505,7 +1557,7 @@ def setup_parser(vq_parser):
     # percent of iterations where one learning rate drop occurs, learning rate divided by 10^drop_times
     vq_parser.add_argument("-lrd",  "--learning_rate_drops", nargs="*", type=float, help="When to drop learning rate (relative to iterations)", default=[75], dest='learning_rate_drops')
     #incomplete arg/ legacy
-    vq_parser.add_argument("-as",   "--auto_stop", type=bool, help="Auto stopping", default=False, dest='auto_stop')
+    vq_parser.add_argument("-as",   "--auto_stop", type=str2bool, help="Auto stopping", default=False, dest='auto_stop')
     # number of differing views that clip get on the image, differing and diverse views may lead to clip grasping it better, and getting better gradients
     vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=None, dest='num_cuts')
     # batch/passes through ascend_txt before using the optimizer updates z or whatever parameters that we optimize for
@@ -1519,19 +1571,22 @@ def setup_parser(vq_parser):
     # specify the output name, in the colab notebook a log is kept to avoid loss of work - every output is saved, though not every itermediate step/evaluation is
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
     # the function saves the outputs for every iteration into /steps and then generates a video afterward from those steps, this video is still generated when keyboard interrupt is called
-    vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
+    vq_parser.add_argument("-vid",  "--video", type=str2bool, help="Create video frames?", default=False, dest='make_video')
     # this is for determinism, use with seed and noise prompt seeds
-    vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
+    vq_parser.add_argument("-d",    "--deterministic", type=str2bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
     # color mapper, nn.module forward, applies effect to image prior to any loss is enables, returns image and loss
     vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
     #thsi porbably should be in the target palette class uhhh
-    vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
+    vq_parser.add_argument("--palette", "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
     # implements custom loss, use array of strings to input loss, new losses are added to loss_class_table in start of file, import for more loss, use add_loss_class to add loss from outside / hot changes
     vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
     # when true, the saves cutouts samples for prompt and spot prompt and spot off prompts, these are saved to current directory, the first few are zoom cutouts, which are zoomed in, and the other are wide ones, which put the image on a black background it seems that caching transforms are broken atm
     vq_parser.add_argument("-tc",  "--test_cutouts", type=bool, help="save the intermediate cutouts", default=False, dest='test_cutouts')
     # transperancy in pixeldraw
     vq_parser.add_argument("--transparent", type=str2bool, help="enable transparency", default=False, dest='transparency')
+    vq_parser.add_argument("--alpha_weight", type=float, help="strenght of alpha loss", default=1., dest='alpha_weight')
+    vq_parser.add_argument("--alpha_use_g", type=str2bool, help="use gaussian mask weighting", default=False, dest='alpha_use_g')
+    vq_parser.add_argument("--alpha_gamma", type=float, help="width-relative sigma for the alpha gaussian", default=4., dest='alpha_gamma')
 
     return vq_parser
 
@@ -1633,6 +1688,13 @@ def process_args(vq_parser, namespace=None):
             base_width = int(size_scale * base_size[0])
             base_height = int(size_scale * base_size[1])
             args.size = [base_width, base_height]
+        elif args.aspect =="retain" and args.init_image is not None:
+            img_pil = Image.open(real_glob(args.init_image)[0])
+            w,h = img_pil.size
+            asp = h/w #w is base
+            h = int(144*asp*size_scale)
+            w = int(144*size_scale)
+            args.size = [w,h]
         else:
             print("aspect not understood, aborting -> ", args.aspect)
             exit(1)
@@ -1737,20 +1799,28 @@ def apply_settings():
     global global_pixray_settings
     settingsDict = None
 
-    # first pass - just get the drawer
+    # first pass - only add things here that can trigger other parser additions (drawers, filters, losses)
     # Create the parser
     vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
     vq_parser.add_argument("--drawer", type=str, help="clipdraw, pixel, etc", default="vqgan", dest='drawer')
+    vq_parser.add_argument("--filters", "--color_mapper", type=str, help="Image Filtering", default=None, dest='color_mapper')
+    vq_parser.add_argument("--losses", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
     settingsDict = SimpleNamespace(**global_pixray_settings)
     settings_core, unknown = vq_parser.parse_known_args(namespace=settingsDict)
 
     vq_parser = setup_parser(vq_parser)
     class_table[settings_core.drawer].add_settings(vq_parser)
 
-    # TODO: this is slighly sloppy and better would be to add settings of loss functions
-    # actually used, not all of those available.
-    for n,l in loss_class_table.items():
-        l.add_settings(vq_parser)
+    if settings_core.color_mapper is not None:
+        filters_class_table[settings_core.color_mapper].add_settings(vq_parser)
+
+    if settings_core.custom_loss is not None:
+        # probably should DRY but...
+        custom_losses = settings_core.custom_loss.split(",")
+        custom_losses = [loss.strip() for loss in custom_losses]
+        for l in custom_losses:
+            l = l.split(':')[0]
+            loss_class_table[l].add_settings(vq_parser)
 
     if len(global_pixray_settings) > 0:
         # check for any bogus entries in the settings
@@ -1785,6 +1855,44 @@ def main():
     settings = apply_settings()    
     do_init(settings)
     do_run(settings)
+
+
+from types import SimpleNamespace
+from strotss import *
+def dostrotss(out, opt, drawer, iters, settings_args):
+    global device
+    out = out.detach()
+    
+    args = {
+        "style": settings_args.style_image,
+        "weight": 2.0,
+        "output": "strotss.png",
+        "device": device,
+        "ospace": "uniform",
+        "resize_to": 512
+    }
+    args = SimpleNamespace(**args)
+
+
+    content_weight = args.weight * 16.0
+
+    device = args.device
+
+
+    filelist = real_glob(args.style)
+    style_pil = [Image.open(f) for f in filelist][0]
+        
+    style_resized = TF.to_tensor(style_pil).to(device).unsqueeze(0)
+    style_resized = TF.resize(style_resized, out.size()[2:4],TF.InterpolationMode.BICUBIC)
+    style_resized=style_resized[:,:3,:,:] # remove alpha
+ 
+
+    start = time()
+    result = strotss(out, style_resized, content_weight, device, args.ospace, opt, drawer, iters)
+    result.save(args.output)
+    print(f'Done in {time()-start:.3f}s')
+
+
 
 if __name__ == '__main__':
     main()

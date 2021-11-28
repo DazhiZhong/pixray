@@ -38,7 +38,7 @@ class GaussianLoss(LossInterface):
         # mseloss = nn.MSELoss()
         loss = torch.abs(out - color)
         # print(loss.size()) 
-        loss = loss*5*torch.abs(1-gaus)
+        loss = loss*torch.abs(1-gaus)
 
         cur_loss = torch.mean(loss)
         return cur_loss*args.gaussian_weight
