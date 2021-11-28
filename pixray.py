@@ -1354,9 +1354,9 @@ def train(args, cur_it):
             opt.step()
         
 
-        if cur_it == args.iterations-1:
-            dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args)
-            args.learning_rate = 0.00001
+        if cur_it == args.iterations or (cur_it % args.style_every==0 and cur_it > args.no_style_it):
+            dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args, style_power = args.style_power)
+
 
 
             
@@ -1583,7 +1583,6 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("--story_prompts", type=str, help="story prompts, seperate with ^", default="", dest='story_prompts')
     vq_parser.add_argument("--story_transition", type=int, help="how many iters per story scene", default=100, dest='story_transition')
     # Add the arguments
-    vq_parser.add_argument("--style_image", type=str, help="style_image", default="", dest='style_image')
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
     # spot is for masking, using the spot_file as a mask to direct different prompts to different parts of the image.
     vq_parser.add_argument("-sp",   "--spot", type=str, help="Spot Text prompts", default=[], dest='spot_prompts')
@@ -1916,6 +1915,8 @@ def apply_settings():
         for l in custom_losses:
             l = l.split(':')[0]
             loss_class_table[l].add_settings(vq_parser)
+    
+    strotss.style_add_settings(vq_parser)
 
     if len(global_pixray_settings) > 0:
         # check for any bogus entries in the settings
@@ -1953,41 +1954,19 @@ def main():
     # global drawer
     # drawer.to_svg()
 
-
-from types import SimpleNamespace
-from strotss import *
-def dostrotss(out, opt, drawer, iters, settings_args):
+import strotss
+def dostrotss(out, opt, drawer, iters, args):
     global device
     out = out.detach()
-    
-    args = {
-        "style": settings_args.style_image,
-        "weight": 2.0,
-        "output": "strotss.png",
-        "device": device,
-        "ospace": "uniform",
-        "resize_to": 512
-    }
-    args = SimpleNamespace(**args)
-
-
-    content_weight = args.weight * 16.0
-
-    device = args.device
-
-
-    filelist = real_glob(args.style)
-    style_pil = [Image.open(f) for f in filelist][0]
-        
+    filelist = real_glob(args.style_image)
+    style_pil = [Image.open(f) for f in filelist][0]     
     style_resized = TF.to_tensor(style_pil).to(device).unsqueeze(0)
     style_resized = TF.resize(style_resized, out.size()[2:4],TF.InterpolationMode.BICUBIC)
     style_resized=style_resized[:,:3,:,:] # remove alpha
- 
-
-    start = time()
-    result = strotss(out, style_resized, content_weight, device, args.ospace, opt, drawer, iters)
-    result.save(args.output)
-    print(f'Done in {time()-start:.3f}s')
+    start = time.time()
+    result = strotss.strotss(out, style_resized, device, opt, drawer, iters, args)
+    result.save(args.style_output)
+    print(f'Done in {time.time()-start:.3f}s')
 
 
 

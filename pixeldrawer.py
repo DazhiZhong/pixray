@@ -366,7 +366,10 @@ class PixelDrawer(DrawingInterface):
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
         img = render(self.canvas_width, self.canvas_height, 2, 2, cur_iteration, None, *scene_args)
         img_h, img_w = img.shape[0], img.shape[1]
+        
         if cur_iteration==self.max_iter:
+            img = img.unsqueeze(0)
+            img = img.permute(0, 3, 1, 2) # NHWC -> NCHW
             print(img.size())
             save_image(img, "transparentout.png")
         alpha = img[:, :, 3:4]

@@ -357,16 +357,9 @@ def calculate_loss(feat_result, feat_content, feat_style, indices, content_weigh
     loss_total = (content_weight * loss_content + loss_style) / (content_weight + style_weight)
     return loss_total
 
-def optimize(result, content, style, scale, content_weight, lr, extractor, opt, drawer, iters, scales):
-    # torch.autograd.set_detect_anomaly(True)
-    # result_pyramid = make_laplace_pyramid(result, 5)
-    # result_pyramid = [l.data.requires_grad_() for l in result_pyramid]
+def optimize(result, content, style, scale, content_weight, lr, extractor, opt, drawer, iters, scales, style_power):
 
-    opt_iter = 200
-    # if scale == 1:
-    #     opt_iter = 800
-    
-
+    opt_iter = args.style_power
 
     # extract features for content
     feat_content = extractor(content) # 
@@ -387,44 +380,29 @@ def optimize(result, content, style, scale, content_weight, lr, extractor, opt, 
     # init indices to optimize over
     xx, xy = sample_indices(feat_content[0], feat_style) # 0 to sample over first layer extracted
     for it in tqdm(range(opt_iter)):
-        # print(it)
-        # print(opt)
-        # print(drawer)
-        
         opt.zero_grad()
-
         stylized = drawer.synth(iters)
-        # print("stylizedgrad", stylized.grad_fn)
-
-        # save_image(stylized, f"stylized-{it}.png")
-
         # upsample or initialize the result
         stylized = TF.resize(stylized, content.size()[2:4],TF.InterpolationMode.BICUBIC)
         # original code has resample here, seems pointless with uniform shuffle
-        # ...
         # also shuffle them every y iter
         if it % 1 == 0 and it != 0:
             np.random.shuffle(xx)
             np.random.shuffle(xy)
-        #  print("stylizedgrad 22", stylized.grad_fn)
         feat_result = extractor(stylized)
-        #  print("stylizedgrad", stylized.grad_fn)
-
         loss = calculate_loss(feat_result, feat_content, feat_style, [xx, xy], content_weight)
-        # print(loss)
         loss.backward()
-
         opt.step()
     print(loss)
     save_image(stylized, f"stylized_scale_{scale:02d}.png")
     return stylized
 
 
-def strotss(content_full, style_full, content_weight=1.0*16.0, device='cuda:0', space='uniform', opt=None, drawer=None, iters=None):
+def strotss(content_full, style_full, device, opt, drawer, iters, args):
 
-
-
-    lr = 2e-3
+    content_weight=args.style_content_weight
+    space=args.style_space
+    lr = args.style_lr
     extractor = Vgg16_Extractor(space=space).to(device)
 
     scale_last = max(content_full.shape[2], content_full.shape[3])
@@ -442,7 +420,7 @@ def strotss(content_full, style_full, content_weight=1.0*16.0, device='cuda:0', 
         print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]')
 
         # do the optimization on this scale
-        result = optimize(None, content, style, scale, content_weight=content_weight, lr=lr, extractor=extractor, opt=opt, drawer=drawer,iters=iters, scales=scales)
+        result = optimize(None, content, style, scale, content_weight, lr, extractor, opt, drawer,iters, scales, args)
 
         # next scale lower weight
         content_weight /= 2.0
@@ -454,3 +432,16 @@ def strotss(content_full, style_full, content_weight=1.0*16.0, device='cuda:0', 
     result_image -= result_image.min()
     result_image /= result_image.max()
     return np_to_pil(result_image * 255.)
+
+
+def style_add_settings(parser):
+    parser.add_argument("--style_every", default=25, dest='style_every')
+    parser.add_argument("--style_power", default=25, dest='style_power')
+    parser.add_argument("--no_style_it", default=100, dest='no_style_it')
+    parser.add_argument("--style_content_weight", default=1, dest='style_content_weight')
+    parser.add_argument("--style_space", default='uniform', dest='style_space') # uniform or vgg
+    parser.add_argument("--style_lr", default=2e-3, dest='style_lr')
+    parser.add_argument("--style_resize_to", default=512, dest='style_resize_to')
+    parser.add_argument("--style_output", default="strotss_out.png", dest='style_output')
+    parser.add_argument("--style_image", default="", dest='style_image')
+    return parser
