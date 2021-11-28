@@ -1657,12 +1657,8 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-vid",  "--video", type=str2bool, help="Create video frames?", default=False, dest='make_video')
     # this is for determinism, use with seed and noise prompt seeds
     vq_parser.add_argument("-d",    "--deterministic", type=str2bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
-    # color mapper, nn.module forward, applies effect to image prior to any loss is enables, returns image and loss
-    vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
     #thsi porbably should be in the target palette class uhhh
     vq_parser.add_argument("--palette", type=str, help="target palette", default=None, dest='palette')
-    # implements custom loss, use array of strings to input loss, new losses are added to loss_class_table in start of file, import for more loss, use add_loss_class to add loss from outside / hot changes
-    vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
     # when true, the saves cutouts samples for prompt and spot prompt and spot off prompts, these are saved to current directory, the first few are zoom cutouts, which are zoomed in, and the other are wide ones, which put the image on a black background it seems that caching transforms are broken atm
     vq_parser.add_argument("-tc",  "--test_cutouts", type=bool, help="save the intermediate cutouts", default=False, dest='test_cutouts')
     # transperancy in pixeldraw
