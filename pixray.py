@@ -4,8 +4,8 @@ import math
 from urllib.request import urlopen
 import sys
 import os
-import json
 import subprocess
+import json
 import glob
 from braceexpand import braceexpand
 from types import SimpleNamespace
@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import os.path
 
 from omegaconf import OmegaConf
+import hashlib
 
 import time
 import torch
@@ -435,7 +436,7 @@ def resize_image(image, out_size):
 
 def rebuild_optimisers(args):
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
-    global drawer, color_mapper
+    global drawer, filters
 
     drop_divisor = 10 ** num_loss_drop
     new_opts = drawer.get_opts(drop_divisor)
@@ -492,18 +493,27 @@ def do_init(args):
     global z_orig, im_targets, z_labels, init_image_tensor, target_image_tensor
     global gside_X, gside_Y, overlay_image_rgba, overlay_image_rgba_list, init_image_rgba_list
     global pmsTable, pmsImageTable, pmsTargetTable, pImages, device, spotPmsTable, spotOffPmsTable
-    global drawer, color_mapper
-    global lossGlobals
+    global drawer, filters
+    global lossGlobals, global_cached_png_info, global_seed_used
 
     reset_session_globals()
 
     # do seed first!
     if args.seed is None or args.seed==-1:
         seed = torch.seed()
-    else:
+    elif isinstance(args.seed, int):
         seed = args.seed
+    elif isinstance(args.seed, str) and args.seed.isdigit():
+        seed = int(args.seed)
+    else:
+        # deterministic 32 bit int from string
+        # https://stackoverflow.com/a/44556106/1010653
+        e_str = args.seed.encode()
+        hash_digest = hashlib.sha512(e_str).digest()
+        seed = int.from_bytes(hash_digest, 'big') % 0x100000000
     int_seed = int(seed)%(2**30)
     print('Using seed:', seed)
+    global_seed_used = seed
     torch.manual_seed(seed)
     np.random.seed(int_seed)
     random.seed(int_seed)
@@ -550,12 +560,24 @@ def do_init(args):
             make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow)
             cutoutsTable[cut_size] = make_cutouts
 
-    if args.color_mapper is not None:
-        if args.color_mapper in filters_class_table:
-            color_mapper = filters_class_table[args.color_mapper](args, device=device)
-        else:
-            print(f"Color mapper {args.color_mapper} not understood")
-            sys.exit(1)
+    filters = None
+    if args.filters is not None:
+        filter_names = args.filters.split(",")
+        filter_names = [f.strip() for f in filter_names]
+        filterClasses = []
+        for filt in filter_names:
+            filt_name, weight, stop = parse_prompt(filt)
+            if filt_name not in filters_class_table:
+                raise ValueError(f"Requested filter not found, aborting: {filt_name}")
+            filtClass = filters_class_table[filt_name]
+            # do special initializations here
+            try:
+                filtInstance = filtClass(args, device=device)
+                filterClasses.append({"filter":filtInstance, "weight": weight})
+            except TypeError as e:
+                print(f'error in initializing {filtClass} - this message is to provide information')
+                raise TypeError(e)
+        filters = filterClasses
 
     init_image_tensor = None
     target_image_tensor = None
@@ -614,8 +636,9 @@ def do_init(args):
         drawer.init_from_tensor(init_tensor)
 
     else:
-        # untested
-        drawer.rand_init(toksX, toksY)
+        drawer.init_from_tensor(init_tensor=None)
+        # this is the old vqgan version [need to patch vqgan to do this?]
+        # drawer.rand_init(toksX, toksY)
 
     if args.overlay_image is not None:
         # todo: maybe split this up on pipes and whatnot
@@ -634,6 +657,8 @@ def do_init(args):
             overlay_image_rgba_list.append(overlay_image_rgba)
 
         overlay_image_rgba_list[0].save('overlay_image0.png')
+
+    global_cached_png_info = None
 
     pmsTable = {}
     pmsImageTable = {}
@@ -747,7 +772,7 @@ def do_init(args):
                 stops = actual_tokens.argmax(dim=-1) - 1
                 embed = perceptor.encode_text(actual_tokens, stops).float()
             else:
-                print(f"--> {clip_model} normal encoding {txt}")
+                # print(f"--> {clip_model} normal encoding {txt}")
                 embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
             pMs.append(Prompt(embed, weight, stop).to(device))
     
@@ -904,7 +929,7 @@ im_targets = None
 z_labels = None
 opts = None
 drawer = None
-color_mapper = None
+filters = None
 normalize = None
 init_image_tensor = None
 target_image_tensor = None
@@ -988,9 +1013,56 @@ def checkdrop(args, iter, losses):
             drop_loss_time = True
     return drop_loss_time
 
+# for a release just bake in the version to prevent git subprocess lookup
+git_official_release_version = "v1.4b1"
+git_fallback_version = "v1.2-60+"
+
+# https://stackoverflow.com/a/40170206/1010653
+# Return the git revision as a string
+def git_version():
+    global git_official_release_version, git_fallback_version
+    if git_official_release_version is not None:
+        return git_official_release_version
+
+    def _minimal_ext_cmd(cmd):
+        # construct minimal environment
+        env = {}
+        for k in ['SYSTEMROOT', 'PATH']:
+            v = os.environ.get(k)
+            if v is not None:
+                env[k] = v
+        # LANGUAGE is used on win32
+        env['LANGUAGE'] = 'C'
+        env['LANG'] = 'C'
+        env['LC_ALL'] = 'C'
+        out = subprocess.Popen(cmd, stdout = subprocess.PIPE, env=env).communicate()[0]
+        return out
+
+    try:
+        out = _minimal_ext_cmd(['git', 'describe', '--always'])
+        GIT_REVISION = out.strip().decode('ascii')
+    except OSError:
+        GIT_REVISION = git_fallback_version
+
+    return GIT_REVISION
+
+global_cached_png_info=None
+def getPngInfo():
+    global global_cached_png_info
+    if global_cached_png_info is None:
+        git_v = git_version()
+        info = PngImagePlugin.PngInfo()
+        info.add_text("Software", f"pixray ({git_v})")
+        # print(global_given_args)
+        for k in global_given_args:
+            info.add_text(f"pixray_{k}", str(global_given_args[k]))
+        info.add_text("pixray_seed_used", str(global_seed_used))
+        global_cached_png_info = info
+    return global_cached_png_info 
+
 @torch.no_grad()
 def checkin(args, iter, losses):
-    global drawer, color_mapper
+    global drawer, filters
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
 
     num_cycles_not_best = iter - best_iter
@@ -1005,11 +1077,12 @@ def checkin(args, iter, losses):
         writestr = f'anim: {cur_anim_index}/{len(anim_output_files)} {writestr}'
     else:
         writestr = f'{writestr} (-{num_cycles_not_best}=>{best_loss:2.4g})'
-    info = PngImagePlugin.PngInfo()
-    info.add_text('comment', f'{args.prompts}')
     timg = drawer.synth(cur_iteration)
-    if color_mapper is not None:
-        timg, closs = color_mapper(timg);
+    if filters is not None and len(filters)>0:
+        for f in filters:
+            filtclass = f["filter"]
+            timg, closs = filtclass(timg);
+
     img = TF.to_pil_image(timg[0].cpu())
     # img = drawer.to_image()
     if cur_anim_index is None:
@@ -1017,7 +1090,7 @@ def checkin(args, iter, losses):
         outfile = f"{outfile[:-4]}_{iter:04d}{outfile[-4:]}"
     else:
         outfile = anim_output_files[cur_anim_index]
-    img.save(outfile, pnginfo=info)
+    img.save(outfile, pnginfo=getPngInfo())
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
         gif_output = make_gif(args, iter)
@@ -1045,9 +1118,17 @@ def ascend_txt(args):
 
     result = []
 
-    if color_mapper is not None:
-        out, c_loss = color_mapper(out);
-        result.append(c_loss);
+    if filters is not None and len(filters)>0:
+        for f in filters:
+            filtclass = f["filter"]
+            filtweight = f["weight"]
+            out, new_losses = filtclass(out);
+            if type(new_losses) is not list and type(new_losses) is not tuple:
+                result.append(filtweight * new_losses)
+            else:
+                # warning: this path might be untested by current losses?
+                weighted_losses = [(filtweight * l) for l in new_losses]
+                result += weighted_losses
 
     if (cur_iteration%2 == 0):
         global_padding_mode = 'reflection'
@@ -1491,6 +1572,8 @@ def do_video(args):
 
 # this dictionary is used for settings in the notebook
 global_pixray_settings = {}
+# this dictionary documents all non-default args
+global_given_args = {}
 
 def setup_parser(vq_parser):
     # Create the parser
@@ -1565,7 +1648,7 @@ def setup_parser(vq_parser):
     # legacy?
     vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
     # control output -> use with determism
-    vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
+    vq_parser.add_argument("--seed", type=str, help="Seed", default=None, dest='seed')
     # this is to specify optimizer behavior, the optimizer is spelled in a british way, some optimizers may decrease learning rate progressively, however these are basically all adam-based optimizers, so changing them is questionable
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, or AdamP)", default='Adam', dest='optimiser')
     # specify the output name, in the colab notebook a log is kept to avoid loss of work - every output is saved, though not every itermediate step/evaluation is
@@ -1577,7 +1660,7 @@ def setup_parser(vq_parser):
     # color mapper, nn.module forward, applies effect to image prior to any loss is enables, returns image and loss
     vq_parser.add_argument("-cm",   "--color_mapper", type=str, help="Color Mapping", default=None, dest='color_mapper')
     #thsi porbably should be in the target palette class uhhh
-    vq_parser.add_argument("--palette", "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
+    vq_parser.add_argument("--palette", type=str, help="target palette", default=None, dest='palette')
     # implements custom loss, use array of strings to input loss, new losses are added to loss_class_table in start of file, import for more loss, use add_loss_class to add loss from outside / hot changes
     vq_parser.add_argument("-loss", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: 'symmetry,smoothness'", default=None, dest='custom_loss')
     # when true, the saves cutouts samples for prompt and spot prompt and spot off prompts, these are saved to current directory, the first few are zoom cutouts, which are zoomed in, and the other are wide ones, which put the image on a black background it seems that caching transforms are broken atm
@@ -1593,7 +1676,7 @@ def setup_parser(vq_parser):
 def process_args(vq_parser, namespace=None):
     global global_aspect_width
     global cur_iteration, cur_anim_index, anim_output_files, anim_cur_zs, anim_next_zs;
-    global global_spot_file
+    global global_spot_file, global_given_args
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
     global test_cutouts
 
@@ -1605,6 +1688,16 @@ def process_args(vq_parser, namespace=None):
     else:
         # sometimes there are both settings and cmd line
         args = vq_parser.parse_args(namespace=namespace)        
+
+    # https://stackoverflow.com/a/66765255/1010653
+    global_given_args = {
+            opt.dest: getattr(args, opt.dest)
+            for opt in vq_parser._option_string_actions.values()
+            if hasattr(args, opt.dest) and opt.default != getattr(args, opt.dest)
+        }
+    # print("NON DEFAULT ARGS ARE")
+    # print(global_given_args)
+    # sys.exit(0)
 
     if args.cudnn_determinism:
         torch.backends.cudnn.deterministic = True
@@ -1740,8 +1833,8 @@ def process_args(vq_parser, namespace=None):
         # print("----> NO VECTOR PROMPT")
         args.vector_prompts = []
 
-    if args.target_palette is not None:
-        args.target_palette = palette_from_string(args.target_palette)
+    if args.palette is not None:
+        args.palette = palette_from_string(args.palette)
 
     if args.overlay_image is not None and args.overlay_every <= 0:
         args.overlay_image = None
@@ -1785,11 +1878,12 @@ def reset_settings():
 def add_settings(**kwargs):
     global global_pixray_settings
     for k, v in kwargs.items():
-        if v is None or v == "None":
-            # just remove the key if it is there
-            global_pixray_settings.pop(k, None)
-        else:
-            global_pixray_settings[k] = v
+        # TODO: is None / "None" a special case or not?
+        global_pixray_settings[k] = v
+        # if v is None or v == "None":
+        #     # just remove the key if it is there
+        #     global_pixray_settings.pop(k, None)
+        # else:
 
 def get_settings():
     global global_pixray_settings
@@ -1802,8 +1896,8 @@ def apply_settings():
     # first pass - only add things here that can trigger other parser additions (drawers, filters, losses)
     # Create the parser
     vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
-    vq_parser.add_argument("--drawer", type=str, help="clipdraw, pixel, etc", default="vqgan", dest='drawer')
-    vq_parser.add_argument("--filters", "--color_mapper", type=str, help="Image Filtering", default=None, dest='color_mapper')
+    vq_parser.add_argument("--drawer",  type=str, help="clipdraw, pixel, etc", default="vqgan", dest='drawer')
+    vq_parser.add_argument("--filters", type=str, help="Image Filtering", default=None, dest='filters')
     vq_parser.add_argument("--losses", "--custom_loss", type=str, help="implement a custom loss type through LossInterface. example: edge", default=None, dest='custom_loss')
     settingsDict = SimpleNamespace(**global_pixray_settings)
     settings_core, unknown = vq_parser.parse_known_args(namespace=settingsDict)
@@ -1811,8 +1905,13 @@ def apply_settings():
     vq_parser = setup_parser(vq_parser)
     class_table[settings_core.drawer].add_settings(vq_parser)
 
-    if settings_core.color_mapper is not None:
-        filters_class_table[settings_core.color_mapper].add_settings(vq_parser)
+    if settings_core.filters is not None:
+        # probably should DRY but...
+        filts = settings_core.filters.split(",")
+        filts = [f.strip() for f in filts]
+        for f in filts:
+            f = f.split(':')[0]
+            filters_class_table[f].add_settings(vq_parser)
 
     if settings_core.custom_loss is not None:
         # probably should DRY but...
@@ -1855,6 +1954,8 @@ def main():
     settings = apply_settings()    
     do_init(settings)
     do_run(settings)
+    # global drawer
+    # drawer.to_svg()
 
 
 from types import SimpleNamespace
