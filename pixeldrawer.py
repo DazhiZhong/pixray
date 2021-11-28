@@ -11,6 +11,7 @@ import argparse
 import math
 import torchvision
 import torchvision.transforms as transforms
+from torchvision.utils import save_image
 import numpy as np
 import PIL.Image
 
@@ -126,6 +127,7 @@ class PixelDrawer(DrawingInterface):
             print('using pixel distance optimiztion !!')
         self.learning_rate = settings.learning_rate
         print(f'learning at rate {settings.learning_rate}')
+        self.max_iter = settings.iterations
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
@@ -357,6 +359,9 @@ class PixelDrawer(DrawingInterface):
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
         img = render(self.canvas_width, self.canvas_height, 2, 2, cur_iteration, None, *scene_args)
         img_h, img_w = img.shape[0], img.shape[1]
+        if cur_iteration==self.max_iter:
+            print(img.size())
+            save_image(img, "transparentout.png")
         alpha = img[:, :, 3:4]
 
         if return_transparency:
