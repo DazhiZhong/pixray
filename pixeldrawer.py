@@ -376,10 +376,10 @@ class PixelDrawer(DrawingInterface):
         img_h, img_w = img.shape[0], img.shape[1]
         
         if cur_iteration==self.max_iter:
-            img = img.unsqueeze(0)
-            img = img.permute(0, 3, 1, 2) # NHWC -> NCHW
-            print(img.size())
-            save_image(img, "transparentout.png")
+            out_img = img.unsqueeze(0)
+            out_img = out_img.permute(0, 3, 1, 2) # NHWC -> NCHW
+            print(out_img.size())
+            save_image(out_img, "transparentout.png")
         alpha = img[:, :, 3:4]
 
         if return_transparency:
