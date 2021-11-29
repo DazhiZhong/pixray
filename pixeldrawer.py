@@ -19,6 +19,14 @@ from util import str2bool
 
 from perlin_numpy import generate_fractal_noise_3d
 
+def divisorGen(n):
+    v = n
+    last = []
+    for i in range(1, v+1) :
+        if n % i == 0 :
+            last.append(i)
+    return last
+
 def rect_from_corners(p0, p1):
     x1, y1 = p0
     x2, y2 = p1
@@ -375,7 +383,9 @@ class PixelDrawer(DrawingInterface):
         alpha = img[:, :, 3:4]
 
         if return_transparency:
-            res = [1,2,4,8,16][random.randint(0,4)] # resolution of the perlin noise
+            res_all = list(set(divisorGen(img_h)) & set(divisorGen(img_w)))
+            assert len(res_all)>=5
+            res = res_all[random.randint(0,4)] # resolution of the perlin noise
             noise = generate_fractal_noise_3d((img_h, img_w, 3), (res, res, 1))
             img = alpha * img[:, :, :3] + (1 - alpha) * torch.tensor(noise, dtype=torch.float32, device=self.device)
         else:

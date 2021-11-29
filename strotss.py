@@ -357,7 +357,7 @@ def calculate_loss(feat_result, feat_content, feat_style, indices, content_weigh
     loss_total = (content_weight * loss_content + loss_style) / (content_weight + style_weight)
     return loss_total
 
-def optimize(result, content, style, scale, content_weight, lr, extractor, opt, drawer, iters, scales, style_power):
+def optimize(result, content, style, scale, content_weight, lr, extractor, opt, drawer, iters, args):
 
     opt_iter = args.style_power
 
@@ -420,7 +420,7 @@ def strotss(content_full, style_full, device, opt, drawer, iters, args):
         print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]')
 
         # do the optimization on this scale
-        result = optimize(None, content, style, scale, content_weight, lr, extractor, opt, drawer,iters, scales, args)
+        result = optimize(None, content, style, scale, content_weight, lr, extractor, opt, drawer,iters, args)
 
         # next scale lower weight
         content_weight /= 2.0

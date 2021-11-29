@@ -1355,7 +1355,7 @@ def train(args, cur_it):
         
 
         if cur_it == args.iterations or (cur_it % args.style_every==0 and cur_it > args.no_style_it):
-            dostrotss(opt=opt, out=drawer.synth(cur_iteration), drawer=drawer, iters=cur_it, settings_args=args, style_power = args.style_power)
+            dostrotss(drawer.synth(cur_iteration), opt, drawer, cur_it, args)
 
 
 
