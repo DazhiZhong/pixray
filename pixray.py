@@ -1,6 +1,5 @@
 import argparse
 import math
-
 from urllib.request import urlopen
 import sys
 import os
@@ -9,12 +8,9 @@ import json
 import glob
 from braceexpand import braceexpand
 from types import SimpleNamespace
-
 import os.path
-
 from omegaconf import OmegaConf
 import hashlib
-
 import time
 import torch
 from torch import nn, optim
