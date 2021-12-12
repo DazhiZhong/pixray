@@ -1049,6 +1049,7 @@ def getPngInfo():
         git_v = git_version()
         info = PngImagePlugin.PngInfo()
         info.add_text("Software", f"pixray ({git_v})")
+        info.add_text("authors","dribnet, dazhizhong") # hi
         # print(global_given_args)
         for k in global_given_args:
             info.add_text(f"pixray_{k}", str(global_given_args[k]))
@@ -1087,6 +1088,7 @@ def checkin(args, iter, losses):
     else:
         outfile = anim_output_files[cur_anim_index]
     img.save(outfile, pnginfo=getPngInfo())
+    img.save(args.output, pnginfo=getPngInfo())
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
         gif_output = make_gif(args, iter)
