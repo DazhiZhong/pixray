@@ -1303,7 +1303,7 @@ def train(args, cur_it):
     global drawer, opts
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
     global overlay_image_rgba, overlay_image_rgba_list, cur_anim_index, init_image_rgba_list
-    global pImages
+    global pImages, z_orig
     
     rebuild_opts_when_done = False
 
@@ -1355,29 +1355,31 @@ def train(args, cur_it):
             opt.step()
         
         if args.style_image:
-            if cur_it == args.iterations or (cur_it % args.style_every==0 and cur_it > args.no_style_it):
+            if cur_it == args.iterations or (cur_it % args.style_every==0 and cur_it >= args.no_style_it):
                 dostrotss(drawer.synth(cur_iteration), opt, drawer, cur_it, args)
-                im_after = drawer.synth(cur_iteration)
-                pil_im_after = TF.to_pil_image(im_after[0])
-                save_image(im_after, f"newim_{cur_iteration}.png")
-                for clip_model in args.clip_models:
-                    pMs = pmsTable[clip_model]
-                    if cur_it > args.style_every+args.no_style_it:
-                        pMs.pop()
-                    perceptor = perceptors[clip_model]
-                    input_resolution = perceptor.visual.input_resolution
-                    # print(f"Running {clip_model} at {input_resolution}")
-                    preprocess = Compose([
-                        Resize(input_resolution, interpolation=Image.BICUBIC),
-                        CenterCrop(input_resolution),
-                        ToTensor()
-                    ])
-                    #to device may be right hmmm
-                    image_mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).cuda()
-                    image_std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).cuda()
-                    images = [preprocess(pil_im_after)]
-                    features = do_image_features(perceptor, images, image_mean, image_std)
-                    pMs.append(Prompt(features, 0.2).to(device))
+            if True:
+                z_orig = drawer.get_z_copy()
+                # im_after = drawer.synth(cur_iteration)
+                # pil_im_after = TF.to_pil_image(im_after[0])
+                # save_image(im_after, f"newim_{cur_iteration}.png")
+                # for clip_model in args.clip_models:
+                #     pMs = pmsTable[clip_model]
+                #     if cur_it > args.style_every+args.no_style_it:
+                #         pMs.pop()
+                #     perceptor = perceptors[clip_model]
+                #     input_resolution = perceptor.visual.input_resolution
+                #     # print(f"Running {clip_model} at {input_resolution}")
+                #     preprocess = Compose([
+                #         Resize(input_resolution, interpolation=Image.BICUBIC),
+                #         CenterCrop(input_resolution),
+                #         ToTensor()
+                #     ])
+                #     #to device may be right hmmm
+                #     image_mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).cuda()
+                #     image_std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).cuda()
+                #     images = [preprocess(pil_im_after)]
+                #     features = do_image_features(perceptor, images, image_mean, image_std)
+                #     pMs.append(Prompt(features, 0.2).to(device))
 
 
 
