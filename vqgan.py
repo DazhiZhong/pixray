@@ -91,6 +91,8 @@ class VqganDrawer(DrawingInterface):
 
     def __init__(self, settings):
         super(DrawingInterface, self).__init__()
+        if not os.path.isdir("models"):
+            os.mkdir("models")
         torch.hub.set_dir("models")
         self.vqgan_model = settings.vqgan_model
 

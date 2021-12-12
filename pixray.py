@@ -1224,7 +1224,7 @@ def ascend_txt(args):
             result.append(cur_loss)
 
     # main init_weight uses spherical loss
-    if args.init_weight:
+    if args.init_weight and z_orig is not None:
         f = drawer.get_z().reshape(1,-1)
         f2 = z_orig.reshape(1,-1)
         cur_loss = spherical_dist_loss(f, f2) * args.init_weight
@@ -1988,7 +1988,7 @@ def dostrotss(out, opt, drawer, iters, args):
     start = time.time()
     result = strotss.strotss(out, style_resized, device, opt, drawer, iters, args)
     result.save(args.style_output)
-    print(f'Done in {time.time()-start:.3f}s')
+    # print(f'Done in {time.time()-start:.3f}s')
 
 
 

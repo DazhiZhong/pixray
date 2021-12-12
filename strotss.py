@@ -379,7 +379,7 @@ def optimize(result, content, style, scale, content_weight, lr, extractor, opt, 
 
     # init indices to optimize over
     xx, xy = sample_indices(feat_content[0], feat_style) # 0 to sample over first layer extracted
-    for it in tqdm(range(opt_iter)):
+    for it in range(opt_iter):
         opt.zero_grad()
         stylized = drawer.synth(iters)
         # upsample or initialize the result
@@ -393,8 +393,8 @@ def optimize(result, content, style, scale, content_weight, lr, extractor, opt, 
         loss = calculate_loss(feat_result, feat_content, feat_style, [xx, xy], content_weight)
         loss.backward()
         opt.step()
-    print(loss)
-    save_image(stylized, f"stylized_scale_{scale:02d}.png")
+    # print(loss)
+    # save_image(stylized, f"stylized_scale_{scale:02d}.png")
     return stylized
 
 
@@ -413,11 +413,11 @@ def strotss(content_full, style_full, device, opt, drawer, iters, args):
             scales.insert(0, divisor)
     
     for scale in scales:
-        print(scale)
+        # print(scale)
         # rescale content to current scale
         content = tensor_resample(content_full, [ content_full.shape[2] // scale, content_full.shape[3] // scale ])
         style = tensor_resample(style_full, [ style_full.shape[2] // scale, style_full.shape[3] // scale ])
-        print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]')
+        # print(f'Optimizing at resoluton [{content.shape[2]}, {content.shape[3]}]')
 
         # do the optimization on this scale
         result = optimize(None, content, style, scale, content_weight, lr, extractor, opt, drawer,iters, args)
