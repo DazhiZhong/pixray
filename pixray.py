@@ -1306,7 +1306,7 @@ def train(args, cur_it):
     rebuild_opts_when_done = False
 
     lossAll = None
-    if cur_it < args.iterations:
+    if cur_it <= args.iterations:
         # this is awkward, but train is in also in charge of saving, so...
         rebuild_opts_when_done = False
 
@@ -1353,7 +1353,7 @@ def train(args, cur_it):
             opt.step()
         
         if args.style_image:
-            if cur_it == args.iterations or (cur_it % args.style_every==0 and cur_it >= args.no_style_it):
+            if cur_it == args.iterations or ((cur_it-args.no_style_it) % args.style_every==0 and cur_it >= args.no_style_it):
                 dostrotss(drawer.synth(cur_iteration), opt, drawer, cur_it, args)
             if True:
                 z_orig = drawer.get_z_copy()
@@ -1980,8 +1980,10 @@ import strotss
 def dostrotss(out, opt, drawer, iters, args):
     global device
     out = out.detach()
-    filelist = real_glob(args.style_image)
-    style_pil = [Image.open(f) for f in filelist][0]     
+    if args.style_image[:4]=='http':
+        style_pil = Image.open(urlopen(args.style_image))
+    else:
+        style_pil = Image.open(real_glob(args.style_image)[0]) 
     style_resized = TF.to_tensor(style_pil).to(device).unsqueeze(0)
     style_resized = TF.resize(style_resized, out.size()[2:4],TF.InterpolationMode.BICUBIC)
     style_resized=style_resized[:,:3,:,:] # remove alpha
