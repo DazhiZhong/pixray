@@ -1061,6 +1061,7 @@ def getPngInfo():
 def checkin(args, iter, losses):
     global drawer, filters
     global best_loss, best_iter, best_z, num_loss_drop, max_loss_drops, iter_drop_delay
+    global callback_function
 
     num_cycles_not_best = iter - best_iter
 
@@ -1100,6 +1101,8 @@ def checkin(args, iter, losses):
             if args.display_clear:
                 clear_output()
             display.display(display.Image(outfile))
+            print("writing to: ", args.output)
+            callback_function(args)
     tqdm.write(writestr)
 
 def ascend_txt(args):
@@ -1992,7 +1995,10 @@ def dostrotss(out, opt, drawer, iters, args):
     result.save(args.style_output)
     # print(f'Done in {time.time()-start:.3f}s')
 
-
+callback_function = lambda x: x
+def add_callback(f):
+    global callback_function
+    callback_function = f
 
 if __name__ == '__main__':
     main()
