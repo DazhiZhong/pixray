@@ -255,12 +255,46 @@ class Prompt(nn.Module):
         dists = dists * self.weight.sign()
         return self.weight.abs() * replace_grad(dists, torch.maximum(dists, self.stop)).mean()
 
+# https://stackoverflow.com/q/354038
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 def parse_prompt(prompt):
-    vals = prompt.rsplit(':', 2)
-    vals = vals + ['', '1', '-inf'][len(vals):]
-    # print(f"parsed vals is {vals}")
-    return vals[0], float(vals[1]), float(vals[2])
+    """Prompts can either just be text, be a text:weight pair, or a text:weight:stop triple"""
+
+    # defaults
+    textPrompt = prompt
+    weight = 1
+    stop = float('-inf')
+
+    # try to parse numbers from the right but stop as soon as that fails
+    extra_numbers = []
+    keep_going = True
+
+    while len(extra_numbers) < 2 and keep_going:
+        vals = textPrompt.rsplit(':', 1)
+        if len(vals) > 1 and is_number(vals[1]):
+            extra_numbers.append(float(vals[1]))
+            textPrompt = vals[0]
+        else:
+            keep_going = False
+
+    # print(f"parsed nums is {textPrompt}, {extra_numbers}")
+
+    # if there is only 1 number, that becomes the weight
+    if len(extra_numbers) == 1:
+        weight = extra_numbers[0]
+    # if there are two numbers it is weight and stop (stored backwards)
+    elif len(extra_numbers) == 2:
+        weight = extra_numbers[1]
+        stop = extra_numbers[0]
+
+    # print(f"parsed vals is {textPrompt}, {weight}, {stop}")
+    return textPrompt, weight, stop
 
 from typing import cast, Dict, List, Optional, Tuple, Union
 
@@ -717,7 +751,7 @@ def do_init(args):
                     if 'http' in f1:
                         # note: this is currently untested...
                         infile = urlopen(f1)
-                        input_files.apped(infile)
+                        input_files.append(infile)
                     else:
                         infiles = real_glob(f1)
                         input_files.extend(infiles)
@@ -1010,8 +1044,8 @@ def checkdrop(args, iter, losses):
     return drop_loss_time
 
 # for a release just bake in the version to prevent git subprocess lookup
-git_official_release_version = "v1.4b1"
-git_fallback_version = "v1.2-60+"
+git_official_release_version = "v1.4.1"
+git_fallback_version = "v1.4+"
 
 # https://stackoverflow.com/a/40170206/1010653
 # Return the git revision as a string
