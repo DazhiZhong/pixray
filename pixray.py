@@ -1245,10 +1245,12 @@ def ascend_txt(args):
 
     if args.spot_prompts:
         for cutoutSize in cutoutsTable:
+            make_cutouts = cutoutsTable[cutoutSize]
             cur_spot_cutouts[cutoutSize] = make_cutouts(out, spot=1)
 
     if args.spot_prompts_off:
         for cutoutSize in cutoutsTable:
+            make_cutouts = cutoutsTable[cutoutSize]
             cur_spot_off_cutouts[cutoutSize] = make_cutouts(out, spot=0)
 
     for clip_model in args.clip_models:
