@@ -3,6 +3,7 @@ import math
 from urllib.request import urlopen
 import sys
 import os
+import gc
 import subprocess
 import json
 import glob
@@ -2101,6 +2102,58 @@ callback_function = lambda x: x
 def add_callback(f):
     global callback_function
     callback_function = f
+
+
+def release():
+    global z_orig , im_targets , z_labels , opts , drawer , normalize , init_image_tensor , target_image_tensor , pmsTable , spotPmsTable , spotOffPmsTable , pmsImageTable , pmsTargetTable , gside_X, gside_Y, init_image_rgba_list, overlay_image_rgba_list, overlay_image_rgba, cur_iteration, cur_anim_index, anim_output_files, anim_cur_zs, anim_next_zs, best_loss , best_iter , best_z , num_loss_drop , max_loss_drops , iter_drop_delay , cutoutsTable , cutoutSizeTable  , device, lossGlobals, perceptors
+    global clip, class_table
+    for i,j in class_table.items():
+        del j
+    del clip
+    del z_orig 
+    del im_targets 
+    del z_labels 
+    del opts 
+    del drawer 
+    del normalize 
+    del init_image_tensor 
+    del target_image_tensor 
+    del pmsTable 
+    del spotPmsTable 
+    del spotOffPmsTable 
+    del pmsImageTable 
+    del pmsTargetTable 
+    del gside_X
+    del gside_Y
+    del init_image_rgba_list
+    del overlay_image_rgba_list
+    del overlay_image_rgba
+    del cur_iteration
+    del cur_anim_index
+    del anim_output_files
+    del anim_cur_zs
+    del anim_next_zs
+    del best_loss 
+    del best_iter 
+    del best_z 
+    del num_loss_drop 
+    del max_loss_drops 
+    del iter_drop_delay 
+
+    # session globals
+    del cutoutsTable 
+    del cutoutSizeTable 
+
+    # persistent globals
+    del device
+
+    #loss globals
+    del lossGlobals 
+    del perceptors
+    
+    torch.cuda.empty_cache()
+    gc.collect()
+
 
 if __name__ == '__main__':
     main()
