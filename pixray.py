@@ -310,6 +310,60 @@ class MyRandomPerspective(K.RandomPerspective):
              mode=self.resample.name.lower(), align_corners=self.align_corners, padding_mode=global_padding_mode
         )
 
+class MyRandomResizedCrop(K.RandomResizedCrop):
+    def apply_transform(
+        self, input: torch.Tensor, params: Dict[str, torch.Tensor], transform: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        if self.cropping_mode == 'resample':  # uses bilinear interpolation to crop
+            transform = cast(torch.Tensor, transform)
+            return kornia.geometry.crop_by_transform_mat(
+                input,
+                transform,
+                self.size,
+                mode=self.resample.name.lower(),
+                padding_mode=global_padding_mode,
+                align_corners=self.align_corners,
+            )
+        if self.cropping_mode == 'slice':  # uses advanced slicing to crop
+            B, C, _, _ = input.shape
+            out = torch.empty(B, C, *self.size, device=input.device, dtype=input.dtype)
+            for i in range(B):
+                x1 = int(params['src'][i, 0, 0])
+                x2 = int(params['src'][i, 1, 0]) + 1
+                y1 = int(params['src'][i, 0, 1])
+                y2 = int(params['src'][i, 3, 1]) + 1
+                out[i] = kornia.geometry.resize(
+                    input[i : i + 1, :, y1:y2, x1:x2],
+                    self.size,
+                    interpolation=(self.resample.name).lower(),
+                    align_corners=self.align_corners,
+                )
+            return out
+        raise NotImplementedError(f"Not supported type: {self.cropping_mode}.")
+
+class MyCenterCrop(K.CenterCrop):
+    def apply_transform(
+        self, input: torch.Tensor, params: Dict[str, torch.Tensor], transform: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        if self.cropping_mode == 'resample':  # uses bilinear interpolation to crop
+            transform = cast(torch.Tensor, transform)
+            return kornia.geometry.crop_by_transform_mat(
+                input, transform[:, :2, :], self.size, self.resample.name.lower(),global_padding_mode, self.align_corners
+            )
+        if self.cropping_mode == 'slice':  # uses advanced slicing to crop
+            # TODO: implement as separated function `crop_and_resize_iterative`
+            B, C, _, _ = input.shape
+            H, W = self.size
+            out = torch.empty(B, C, H, W, device=input.device, dtype=input.dtype)
+            for i in range(B):
+                x1 = int(params['src'][i, 0, 0])
+                x2 = int(params['src'][i, 1, 0]) + 1
+                y1 = int(params['src'][i, 0, 1])
+                y2 = int(params['src'][i, 3, 1]) + 1
+                out[i] = input[i : i + 1, :, y1:y2, x1:x2]
+            return out
+        raise NotImplementedError(f"Not supported type: {self.cropping_mode}.")
+
 
 cached_spot_indexes = {}
 def fetch_spot_indexes(sideX, sideY):
@@ -343,6 +397,7 @@ def fetch_spot_indexes(sideX, sideY):
 # f[0].shape = [60,3]
 
 class MakeCutouts(nn.Module):
+    #made spicier lol
     def __init__(self, cut_size, cutn, cut_pow=1.):
         global global_aspect_width
 
@@ -350,38 +405,50 @@ class MakeCutouts(nn.Module):
         self.cut_size = cut_size
         self.cutn = cutn
         self.cutn_zoom = int(2*cutn/3)
+        cut_pow = float(cut_pow)
         self.cut_pow = cut_pow
         self.transforms = None
 
+        randomcroppadding = {
+            "reflection":"reflect",
+            "border":"edge",
+        }
+
+        randomaffinepadding = {
+            "reflection":2,
+            "border":1,
+        }
+
         augmentations = []
         if global_aspect_width != 1:
-            augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
-        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+            augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", padding_mode=randomcroppadding[global_padding_mode], return_transform=True))
+        augmentations.append(MyRandomPerspective(distortion_scale=0.40*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
+        # augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(max(0.1-0.1*(cut_pow-1),0.01),0.75*cut_pow),  ratio=(max(0.85-0.85*(cut_pow-1),0.1),1.2+1.2*cut_pow), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
+        augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.05,1.75),  ratio=(0.75,1.3), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.2, saturation=0.2, p=min(0.8*cut_pow,1), return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
         augmentations = []
-        if global_aspect_width == 1:
-            n_s = 0.95
-            n_t = (1-n_s)/2
-            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0, return_transform=True))
-        elif global_aspect_width > 1:
-            n_s = 1/global_aspect_width
-            n_t = (1-n_s)/2
-            augmentations.append(K.RandomAffine(degrees=0, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
-        else:
-            n_s = global_aspect_width
-            n_t = (1-n_s)/2
-            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
+        # if global_aspect_width == 1:
+        n_s = 0.85
+        n_t = (1-n_s)/2
+        augmentations.append(K.RandomAffine(degrees=30, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+        # elif global_aspect_width > 1:
+        #     n_s = 1/global_aspect_width
+        #     n_t = (1-n_s)/2
+        #     augmentations.append(K.RandomAffine(degrees=30, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+        # else:
+        #     n_s = global_aspect_width
+        #     n_t = (1-n_s)/2
+        #     augmentations.append(K.RandomAffine(degrees=30, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
 
         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
-        augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+        augmentations.append(MyCenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
+        augmentations.append(MyRandomPerspective(distortion_scale=0.30, p=min(0.7*cut_pow,1), return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.2, saturation=0.2, p=min(0.8*cut_pow,1), return_transform=True))
         self.augs_wide = nn.Sequential(*augmentations)
 
-        self.noise_fac = 0.1
+        self.noise_fac = 0.15
         
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
@@ -429,12 +496,11 @@ class MakeCutouts(nn.Module):
             batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
                 (self.cut_size, self.cut_size), padding_mode='zeros')
             batch = torch.cat([batch1, batch2])
-            if test_cutouts:
-                if cur_iteration < 2:
-                    for j in range(4):
-                        TF.to_pil_image(batch[j].cpu()).save(f"cached_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
-                        j_wide = j + self.cutn_zoom
-                        TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+            # if cur_iteration < 2:
+            #     for j in range(4):
+            #         TF.to_pil_image(batch[j].cpu()).save(f"cached_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+            #         j_wide = j + self.cutn_zoom
+            #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
         else:
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
             batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
@@ -443,12 +509,11 @@ class MakeCutouts(nn.Module):
             # print(batch.shape)
             self.transforms = torch.cat([transforms1, transforms2])
             ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
-            if test_cutouts:
-                if cur_iteration < 2:
-                    for j in range(4):
-                        TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
-                        j_wide = j + self.cutn_zoom
-                        TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+            # if cur_iteration < 2:
+            #     for j in range(4):
+            #         TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+            #         j_wide = j + self.cutn_zoom
+            #         TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
 
         # print(batch.shape, self.transforms.shape)
         
@@ -456,6 +521,7 @@ class MakeCutouts(nn.Module):
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
         return batch
+
 
 
 def resize_image(image, out_size):
