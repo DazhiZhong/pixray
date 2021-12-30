@@ -1201,8 +1201,8 @@ def checkin(args, iter, losses):
             if args.display_clear:
                 clear_output()
             display.display(display.Image(outfile))
-            print("writing to: ", args.output)
-            callback_function(args)
+    print("writing to: ", args.output)
+    callback_function(args)
     tqdm.write(writestr)
 
 def ascend_txt(args):
