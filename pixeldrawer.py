@@ -125,6 +125,7 @@ class PixelDrawer(DrawingInterface):
         parser.add_argument("--pixel_dist_opt", type=bool, help="False->pixels don't move True->pixels can move a bit (experimental)", default=False, dest='pixel_dist_opt')
         parser.add_argument("--pixel_edge_check", type=str2bool, help="ensure grid is symmetric", default=True, dest='pixel_edge_check')
         parser.add_argument("--pixel_iso_check", type=str2bool, help="ensure tri and hex shapes are w/h scaled", default=True, dest='pixel_iso_check')
+        parser.add_argument("--pixel_dist_lr", type=float, default=0.0, dest='pixel_dist_lr')
         return parser
 
     def __init__(self, settings):
@@ -136,6 +137,7 @@ class PixelDrawer(DrawingInterface):
         self.learning_rate = settings.learning_rate
         print(f'learning at rate {settings.learning_rate}')
         self.max_iter = settings.iterations
+        self.pixel_dist_lr = settings.pixel_dist_lr
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
@@ -343,7 +345,11 @@ class PixelDrawer(DrawingInterface):
         # width_optim = torch.optim.Adam(stroke_width_vars, lr=0.1)
         color_optim = torch.optim.Adam(self.color_vars, lr=self.learning_rate/10/decay_divisor)
         if self.pixel_dist_opt:
-            point_optim = torch.optim.Adam(self.point_vars, lr=self.learning_rate/decay_divisor)
+            if self.pixel_dist_lr!=0:
+                dist_lr = self.pixel_dist_lr/decay_divisor
+            else:
+                dist_lr = self.learning_rate/decay_divisor
+            point_optim = torch.optim.Adam(self.point_vars, lr=dist_lr)
             self.opts = [color_optim,point_optim]
         else:
             self.opts = [color_optim,]
