@@ -19,6 +19,7 @@ class TargetLoss(LossInterface):
     def add_settings(parser):
         parser.add_argument("-tti",  "--true_target_image", type=str, help="this gives a mse loss for a given image, hard way", default="", dest='true_target_image')
         parser.add_argument("-ttw",  "--true_target_weight", type=float, help="true_target_image loss weights", default=0, dest='true_target_weight')
+        parser.add_argument("--true_target_multi", type=bool, help="use l1 and l2", default=False, dest='true_target_multi')
         return parser
 
     def parse_settings(self,args):
@@ -42,11 +43,14 @@ class TargetLoss(LossInterface):
         return lossglobals
 
     def get_loss(self, cur_cutouts, out, args, globals=None, lossGlobals=None):
-        # mseloss = nn.MSELoss()
         if self.t_im is None:
             self.t_im = TF.resize(lossGlobals['target_im'], out.size()[2:4],TF.InterpolationMode.BICUBIC)
-        # cur_loss = mseloss(out, self.t_im) * 0.5
         cur_loss = torch.sum(self.loss_fn_vgg(out, self.t_im)).to(self.device)
+        if args.true_target_multi:
+            l1 = nn.L1Loss()
+            mse = nn.MSELoss()
+            cur_loss+=l1(out, self.t_im).to(self.device)*0.5
+            cur_loss+=mse(out, self.t_im).to(self.device)*0.5     
         return cur_loss * args.true_target_weight
 
 

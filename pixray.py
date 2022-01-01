@@ -105,6 +105,7 @@ from Losses.SmoothnessLoss import SmoothnessLoss
 from Losses.DetailLoss import DetailLoss
 from Losses.EdgeLoss import EdgeLoss
 from Losses.GaussianLoss import GaussianLoss
+from Losses.TargetLoss import TargetLoss
 
 loss_class_table = {
     "palette": PaletteLoss,
@@ -114,6 +115,7 @@ loss_class_table = {
     "edge": EdgeLoss,
     "detail": DetailLoss,
     "gaussian": GaussianLoss,
+    "target": TargetLoss,
 }
 
 
@@ -1197,7 +1199,7 @@ def checkin(args, iter, losses):
         if IS_NOTEBOOK and iter % args.display_every == 0:
             clear_output()
             display.display(display.Image(open(gif_output,'rb').read()))
-    if IS_NOTEBOOK and iter % args.display_every == 0:
+    if IS_NOTEBOOK and iter!=0 and iter % args.display_every == 0:
         if cur_anim_index is None or iter == 0:
             if args.display_clear:
                 clear_output()
@@ -1491,7 +1493,7 @@ def train(args, cur_it):
 
         drawer.clip_z()
 
-    if cur_it == args.iterations:
+    if cur_it >= args.iterations:
         # this resetting to best is currently disabled
         # drawer.set_z(best_z)
         checkin(args, cur_it, lossAll)
@@ -1666,7 +1668,7 @@ def do_video(args):
 
     total_frames = last_frame-init_frame
 
-    length = 15 # Desired time of the video in seconds
+    length = args.video_length # Desired time of the video in seconds
 
     frames = []
     tqdm.write('Generating video...')
@@ -1708,6 +1710,7 @@ def setup_parser(vq_parser):
     # vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
     #added
+    vq_parser.add_argument("--video_length", type=int, default=15, dest='video_length')
     vq_parser.add_argument("--story_prompts", type=str, help="story prompts, seperate with ^", default="", dest='story_prompts')
     vq_parser.add_argument("--story_transition", type=int, help="how many iters per story scene", default=100, dest='story_transition')
     # Add the arguments
