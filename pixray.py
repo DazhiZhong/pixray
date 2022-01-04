@@ -414,7 +414,7 @@ class MakeCutouts(nn.Module):
 
         randomcroppadding = {
             "reflection":"reflect",
-            "border":"edge",
+            "border":"reflect", #bug here, kornia issue
         }
 
         randomaffinepadding = {
