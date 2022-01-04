@@ -1184,8 +1184,12 @@ def checkin(args, iter, losses):
     if filters is not None and len(filters)>0:
         for f in filters:
             filtclass = f["filter"]
-            timg, closs = filtclass(timg);
-
+            timg, closs = filtclass(timg)
+    
+    ioimg = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+    ioimg = np.transpose(img, (1, 2, 0))
+    
+    
     img = TF.to_pil_image(timg[0].cpu())
     # img = drawer.to_image()
     if cur_anim_index is None:
@@ -1193,8 +1197,10 @@ def checkin(args, iter, losses):
         outfile = f"{outfile[:-4]}_{iter:04d}{outfile[-4:]}"
     else:
         outfile = anim_output_files[cur_anim_index]
-    img.save(outfile, pnginfo=getPngInfo())
-    img.save(args.output, pnginfo=getPngInfo())
+    imageio.imwrite(outfile, np.array(ioimg))
+    imageio.imwrite(args.output, np.array(ioimg))
+    # img.save(outfile, pnginfo=getPngInfo())
+    # img.save(args.output, pnginfo=getPngInfo())
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
         gif_output = make_gif(args, iter)
