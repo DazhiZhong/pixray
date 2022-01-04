@@ -81,11 +81,13 @@ try:
     from drawers.clipdrawer import ClipDrawer
     from drawers.pixeldrawer import PixelDrawer
     from drawers.linedrawer import LineDrawer
+    from drawers.dotdrawer import DotDrawer
     # update class_table if these import OK
     class_table.update({
         "line_sketch": LineDrawer,
         "pixel": PixelDrawer,
-        "clipdraw": ClipDrawer
+        "clipdraw": ClipDrawer,
+        "dot": DotDrawer,
     })
 except ImportError as e:
     print("--> Not running with pydiffvg drawer support ", e)
