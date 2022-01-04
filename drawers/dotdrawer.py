@@ -21,7 +21,9 @@ import PIL.Image
 class DotDrawer(DrawingInterface):
     @staticmethod
     def add_settings(parser):
-        parser.add_argument("--dots", type=int, help="number strokes", default=5000, dest='dots')
+        parser.add_argument("--dots", type=int,  default=5000, dest='dots')
+        parser.add_argument("--dot_size", type=int, default=3.0, dest='dot_size')
+        parser.add_argument("--dot_size_grad", type=bool, default=False, dest='dot_size_grad')
         # parser.add_argument("--min_stroke_width", type=float, help="min width (percent of height)", default=1, dest='min_stroke_width')
         # parser.add_argument("--max_stroke_width", type=float, help="max width (percent of height)", default=5, dest='max_stroke_width')
         return parser
@@ -31,7 +33,9 @@ class DotDrawer(DrawingInterface):
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
-        self.num_paths = settings.dots
+        self.dots = settings.dots
+        self.dot_size = settings.dot_size
+        self.dot_size_grad = settings.dot_size_grad
 
     def load_model(self, settings, device):
         # Use GPU if available
@@ -41,7 +45,6 @@ class DotDrawer(DrawingInterface):
         print("clipdraw",device)
 
         canvas_width, canvas_height = self.canvas_width, self.canvas_height
-        num_paths = self.num_paths
 
 
         # Initialize 
@@ -69,7 +72,7 @@ class DotDrawer(DrawingInterface):
         fill_color_vars.append(path_group.fill_color)
 
         #dots
-        for i in range(num_paths):
+        for i in range(self.dots):
             # num_segments = 1
             # num_control_points = torch.zeros(num_segments, dtype = torch.int32) + 2
             # points = []
@@ -87,7 +90,7 @@ class DotDrawer(DrawingInterface):
             r = random.random()*canvas_width, random.random()*canvas_height
             r = torch.tensor(r)
 
-            cir = pydiffvg.Circle(torch.tensor(random.uniform(3.0,3.0),dtype=torch.float), r, stroke_width=torch.tensor(0.0,dtype=torch.float))
+            cir = pydiffvg.Circle(torch.tensor(self.dot_size,dtype=torch.float), r, stroke_width=torch.tensor(0.0,dtype=torch.float))
             shapes.append(cir)
 
 
@@ -103,7 +106,8 @@ class DotDrawer(DrawingInterface):
         img = render(canvas_width, canvas_height, 2, 2, 0, None, *scene_args)
 
         for path in shapes[1:]:
-            # path.radius.requires_grad = True
+            if self.dot_size_grad:
+                path.radius.requires_grad = True
             radius_vars.append(path.radius)
             path.center.requires_grad = True
             center_vars.append(path.center)
