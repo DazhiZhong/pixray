@@ -108,6 +108,7 @@ from Losses.DetailLoss import DetailLoss
 from Losses.EdgeLoss import EdgeLoss
 from Losses.GaussianLoss import GaussianLoss
 from Losses.TargetLoss import TargetLoss
+from Losses.CannyLoss import CannyLoss
 
 loss_class_table = {
     "palette": PaletteLoss,
@@ -118,6 +119,7 @@ loss_class_table = {
     "detail": DetailLoss,
     "gaussian": GaussianLoss,
     "target": TargetLoss,
+    "canny": CannyLoss,
 }
 
 
