@@ -1188,8 +1188,8 @@ def checkin(args, iter, losses):
             filtclass = f["filter"]
             timg, closs = filtclass(timg)
     
-    ioimg = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
-    ioimg = np.transpose(img, (1, 2, 0))
+    ioimg = np.array(timg.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+    ioimg = np.transpose(ioimg, (1, 2, 0))
     
     
     img = TF.to_pil_image(timg[0].cpu())
