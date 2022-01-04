@@ -96,7 +96,7 @@ class DotDrawer(DrawingInterface):
 
             # path = pydiffvg.Path(num_control_points = num_control_points, points = points, stroke_width = torch.tensor((min_width + max_width)/4), is_closed = False)
             # shapes.append(path)
-            path_group = pydiffvg.ShapeGroup(shape_ids = torch.tensor([len(shapes) - 1]), fill_color = torch.tensor([random.random(), random.random(), random.random(),random.random()]), stroke_color = torch.tensor([random.random(), random.random(), random.random(),random.random()]))
+            path_group = pydiffvg.ShapeGroup(shape_ids = torch.tensor([len(shapes) - 1]), fill_color = torch.tensor([random.random(), random.random(), random.random(),random.random()]), stroke_color = None)
             shape_groups.append(path_group)
 
         # Just some diffvg setup
@@ -106,18 +106,17 @@ class DotDrawer(DrawingInterface):
         img = render(canvas_width, canvas_height, 2, 2, 0, None, *scene_args)
 
         for path in shapes[1:]:
-            if self.dot_size_grad:
-                path.radius.requires_grad = True
+            path.radius.requires_grad = True
             radius_vars.append(path.radius)
             path.center.requires_grad = True
             center_vars.append(path.center)
             # path.stroke_width.requires_grad = True
-            stroke_width_vars.append(path.stroke_width)
+            # stroke_width_vars.append(path.stroke_width)
         for group in shape_groups[1:]:
             group.fill_color.requires_grad = True
             fill_color_vars.append(group.fill_color)
             # group.stroke_color.requires_grad = True
-            stroke_color_vars.append(group.stroke_color)
+            # stroke_color_vars.append(group.stroke_color)
 
         self.radius_vars = radius_vars
         self.center_vars = center_vars
@@ -134,11 +133,12 @@ class DotDrawer(DrawingInterface):
         # Optimizers
         radius_optim = torch.optim.Adam(self.radius_vars, lr=1.0/decay_divisor)
         center_optim = torch.optim.Adam(self.center_vars, lr=1.0/decay_divisor)
-        width_optim = torch.optim.Adam(self.stroke_width_vars, lr=0.1/decay_divisor)
+        # width_optim = torch.optim.Adam(self.stroke_width_vars, lr=0.1/decay_divisor)
         
-        fill_color_optim = torch.optim.Adam(self.fill_color_vars, lr=0.04/decay_divisor)
-        stroke_color_optim = torch.optim.Adam(self.stroke_color_vars, lr=0.01/decay_divisor)
-        opts = [radius_optim,center_optim,width_optim,fill_color_optim,stroke_color_optim]
+        fill_color_optim = torch.optim.Adam(self.fill_color_vars, lr=0.01/decay_divisor)
+        # stroke_color_optim = torch.optim.Adam(self.stroke_color_vars, lr=0.01/decay_divisor)
+        # opts = [radius_optim,center_optim,width_optim,fill_color_optim,stroke_color_optim]
+        opts = [radius_optim,center_optim,fill_color_optim]
         return opts
 
     def rand_init(self, toksX, toksY):

@@ -432,7 +432,7 @@ class MakeCutouts(nn.Module):
         augmentations.append(MyRandomPerspective(distortion_scale=0.40*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
         # augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(max(0.1-0.1*(cut_pow-1),0.01),0.75*cut_pow),  ratio=(max(0.85-0.85*(cut_pow-1),0.1),1.2+1.2*cut_pow), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
         augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.05,1.75),  ratio=(0.75,1.3), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.2, saturation=0.2, p=min(0.8*cut_pow,1), return_transform=True))
+        augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
         augmentations = []
@@ -452,7 +452,7 @@ class MakeCutouts(nn.Module):
         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(MyCenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
         augmentations.append(MyRandomPerspective(distortion_scale=0.30, p=min(0.7*cut_pow,1), return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.2, saturation=0.2, p=min(0.8*cut_pow,1), return_transform=True))
+        augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
         self.augs_wide = nn.Sequential(*augmentations)
 
         self.noise_fac = 0.15
