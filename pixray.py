@@ -63,14 +63,14 @@ global_spot_file = None
 
 from util import map_number, palette_from_string, real_glob
 
-from vqgan import VqganDrawer
+from drawers.vqgan import VqganDrawer
 
 class_table = {
     "vqgan": VqganDrawer
 }
 
 try:
-    from fftdrawer import FftDrawer
+    from drawers.fftdrawer import FftDrawer
     # update class_table if these import OK
     class_table.update({"fft": FftDrawer})
 except ImportError as e:
@@ -78,9 +78,9 @@ except ImportError as e:
     pass
 
 try:
-    from clipdrawer import ClipDrawer
-    from pixeldrawer import PixelDrawer
-    from linedrawer import LineDrawer
+    from drawers.clipdrawer import ClipDrawer
+    from drawers.pixeldrawer import PixelDrawer
+    from drawers.linedrawer import LineDrawer
     # update class_table if these import OK
     class_table.update({
         "line_sketch": LineDrawer,
