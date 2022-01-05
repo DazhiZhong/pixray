@@ -64,7 +64,7 @@ global_spot_file = None
 from util import map_number, palette_from_string, real_glob
 
 from drawers.vqgan import VqganDrawer
-from vdiff import VdiffDrawer
+from drawers.vdiff import VdiffDrawer
 
 class_table = {
     "vqgan": VqganDrawer,
@@ -885,7 +885,7 @@ def do_init(args):
             allweights.append(weight)
             pMs.append(Prompt(embed, weight, stop).to(device))
     
-    if args.drawer=="vdiff" and args.vdiff_model=="cc12m_1":
+    if args.drawer=="vdiff" and (args.vdiff_model=="cc12m_1" or args.vdiff_model=="cc12m_1_cfg"):
         target_embeds = torch.cat(allpromptembeds)
         allweights = torch.tensor(allweights, dtype=torch.float, device=device)
         clip_embed = F.normalize(target_embeds.mul(allweights[:, None]).sum(0, keepdim=True), dim=-1)
