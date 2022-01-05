@@ -64,9 +64,11 @@ global_spot_file = None
 from util import map_number, palette_from_string, real_glob
 
 from drawers.vqgan import VqganDrawer
+from vdiff import VdiffDrawer
 
 class_table = {
-    "vqgan": VqganDrawer
+    "vqgan": VqganDrawer,
+    "vdiff": VdiffDrawer
 }
 
 try:
@@ -862,6 +864,8 @@ def do_init(args):
 
     # CLIP tokenize/encode
     # NR: Weights / blending
+    allpromptembeds = []
+    allweights = []
     for prompt in args.prompts:
         for clip_model in args.clip_models:
             pMs = pmsTable[clip_model]
@@ -877,8 +881,15 @@ def do_init(args):
             else:
                 # print(f"--> {clip_model} normal encoding {txt}")
                 embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+            allpromptembeds.append(embed)
+            allweights.append(weight)
             pMs.append(Prompt(embed, weight, stop).to(device))
     
+    if args.drawer=="vdiff" and args.vdiff_model=="cc12m_1":
+        target_embeds = torch.cat(allpromptembeds)
+        allweights = torch.tensor(allweights, dtype=torch.float, device=device)
+        clip_embed = F.normalize(target_embeds.mul(allweights[:, None]).sum(0, keepdim=True), dim=-1)
+        drawer.sample_state[3] = {"clip_embed":clip_embed}
 
 
     for vect_prompt in args.vector_prompts:
@@ -1117,7 +1128,7 @@ def checkdrop(args, iter, losses):
     return drop_loss_time
 
 # for a release just bake in the version to prevent git subprocess lookup
-git_official_release_version = "v1.4.1"
+git_official_release_version = None
 git_fallback_version = "v1.4+"
 
 # https://stackoverflow.com/a/40170206/1010653
@@ -1502,6 +1513,14 @@ def train(args, cur_it):
             
 
         drawer.clip_z()
+
+    if args.drawer == "vdiff" and cur_it>=1:
+        lr = drawer.sample_state[6][cur_it] / drawer.sample_state[5][cur_it]
+        drawer.x = drawer.makenoise(cur_it)
+        drawer.x.requires_grad_()
+        to_optimize = [ drawer.x ]
+        opt = optim.Adam(to_optimize, lr=min(lr*0.001,0.01))
+        opts = [opt]
 
     if cur_it >= args.iterations:
         # this resetting to best is currently disabled
