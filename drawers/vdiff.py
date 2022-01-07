@@ -76,7 +76,8 @@ class VdiffDrawer(DrawingInterface):
         self.gen_width = roundup(self.canvas_width, ROUNDUP_SIZE)
         self.gen_height = roundup(self.canvas_height, ROUNDUP_SIZE)
         self.iterations = settings.iterations
-        self.eta = 1
+        self.eta = 1.0
+        self.init_image = settings.init_image
 
     def load_model(self, settings, device):
         model = get_model(self.vdiff_model)()
@@ -118,7 +119,7 @@ class VdiffDrawer(DrawingInterface):
         self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
         print(self.t.size(), self.steps.size())
         print(type(init_tensor))
-        if init_tensor is not None:
+        if self.init_image is not None:
             self.steps = self.steps[self.steps < 0.9]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps)
             self.x = init_tensor * alpha[0] + self.x * sigma[0]
