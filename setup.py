@@ -68,4 +68,5 @@ setup(
     install_requires=install_requires,
     classifiers=[],
     cmdclass={'install': InstallPixray},
+    include_package_data=True
 )
