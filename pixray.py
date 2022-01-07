@@ -1525,7 +1525,8 @@ def train(args, cur_it):
         to_optimize = [ drawer.x ]
         opt = optim.Adam(to_optimize, lr=min(lr*0.001,0.01))
         opts = [opt]
-
+        if cur_it >= drawer.total_its:
+            return False
     if cur_it >= args.iterations:
         # this resetting to best is currently disabled
         # drawer.set_z(best_z)

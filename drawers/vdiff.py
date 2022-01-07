@@ -63,6 +63,7 @@ class VdiffDrawer(DrawingInterface):
     @staticmethod
     def add_settings(parser):
         parser.add_argument("--vdiff_model", type=str, help="VDIFF model from [yfcc_2, yfcc_1, cc12m_1,cc12m_1_cfg]", default='yfcc_2', dest='vdiff_model')
+        parser.add_argument("--vdiff_init_skip", type=float, help="skip steps (step power) when init", default=0.9, dest='vdiff_init_skip')
         # parser.add_argument("--vqgan_config", type=str, help="VQGAN config", default=None, dest='vqgan_config')
         # parser.add_argument("--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=None, dest='vqgan_checkpoint')
         return parser
@@ -79,6 +80,8 @@ class VdiffDrawer(DrawingInterface):
         self.iterations = settings.iterations
         self.eta = 1.0
         self.init_image = settings.init_image
+        self.vdiff_init_skip = settings.vdiff_init_skip
+        self.total_its = settings.iterations
 
     def load_model(self, settings, device):
         model = get_model(self.vdiff_model)()
@@ -120,11 +123,12 @@ class VdiffDrawer(DrawingInterface):
         self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
         if self.init_image is not None:
             save_image(init_tensor, 'imageout.png')
-            self.steps = self.steps[self.steps < 0.9]
+            self.steps = self.steps[self.steps < self.vdiff_init_skip]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps)
             self.x = init_tensor * alpha[0] + self.x * sigma[0]
             self.sample_state[5], self.sample_state[6] = alpha, sigma
             self.sample_state[1] = self.steps
+            self.total_its = len(self.steps)
         self.x.requires_grad_(True)
         self.pred = None 
         self.v = None 
