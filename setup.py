@@ -70,12 +70,7 @@ setup(
     url='https://github.com/dazhizhong/pixray',
     author='Dazhi Zhong, dribnet',
     packages=['.'],
-    install_requires=[
-        'braceexpand',
-        'kornia',
-        'omegaconf',
-        'torch_optimizer',
-    ],
+    install_requires=install_requires,
     classifiers=[],
     cmdclass={'install': InstallPixray},
 )
