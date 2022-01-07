@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.install import install
 import os, warnings
 
@@ -70,7 +70,7 @@ setup(
     description='text-to-image neural generation engine',
     url='https://github.com/dazhizhong/pixray',
     author='Dazhi Zhong, dribnet',
-    packages=['.'],
+    packages=find_packages(),
     install_requires=install_requires,
     classifiers=[],
     cmdclass={'install': InstallPixray},
