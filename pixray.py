@@ -406,8 +406,134 @@ def fetch_spot_indexes(sideX, sideY):
 # f = generate.fetch_spot_indexes(5, 5)
 # f[0].shape = [60,3]
 
+# class MakeCutouts(nn.Module):
+#     #made spicier lol
+#     def __init__(self, cut_size, cutn, cut_pow=1.):
+#         global global_aspect_width
+
+#         super().__init__()
+#         self.cut_size = cut_size
+#         self.cutn = cutn
+#         self.cutn_zoom = int(2*cutn/3)
+#         cut_pow = float(cut_pow)
+#         self.cut_pow = cut_pow
+#         self.transforms = None
+
+#         randomcroppadding = {
+#             "reflection":"reflect",
+#             "border":"reflect", #bug here, kornia issue
+#         }
+
+#         randomaffinepadding = {
+#             "reflection":2,
+#             "border":1,
+#         }
+
+#         augmentations = []
+#         if global_aspect_width != 1:
+#             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", padding_mode=randomcroppadding[global_padding_mode], return_transform=True))
+#         augmentations.append(MyRandomPerspective(distortion_scale=0.40*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
+#         # augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(max(0.1-0.1*(cut_pow-1),0.01),0.75*cut_pow),  ratio=(max(0.85-0.85*(cut_pow-1),0.1),1.2+1.2*cut_pow), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
+#         augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.95,1.75),  ratio=(0.75,1.3), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
+#         augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
+#         self.augs_zoom = nn.Sequential(*augmentations)
+
+#         augmentations = []
+#         # if global_aspect_width == 1:
+#         n_s = 0.90
+#         n_t = (1-n_s)/2
+#         augmentations.append(K.RandomAffine(degrees=20, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+#         # elif global_aspect_width > 1:
+#         #     n_s = 1/global_aspect_width
+#         #     n_t = (1-n_s)/2
+#         #     augmentations.append(K.RandomAffine(degrees=30, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+#         # else:
+#         #     n_s = global_aspect_width
+#         #     n_t = (1-n_s)/2
+#         #     augmentations.append(K.RandomAffine(degrees=30, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+
+#         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
+#         augmentations.append(MyCenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
+#         augmentations.append(MyRandomPerspective(distortion_scale=0.30*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
+#         augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
+#         self.augs_wide = nn.Sequential(*augmentations)
+
+#         self.noise_fac = 0.15
+        
+#         # Pooling
+#         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
+#         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
+
+#     def forward(self, input, spot=None):
+#         global global_aspect_width, cur_iteration
+#         sideY, sideX = input.shape[2:4]
+#         max_size = min(sideX, sideY)
+#         min_size = min(sideX, sideY, self.cut_size)
+#         cutouts = []
+#         mask_indexes = None
+
+#         if spot is not None:
+#             spot_indexes = fetch_spot_indexes(self.cut_size, self.cut_size)
+#             if spot == 0:
+#                 mask_indexes = spot_indexes[1]
+#             else:
+#                 mask_indexes = spot_indexes[0]
+#             # print("Mask indexes ", mask_indexes)
+
+#         for _ in range(self.cutn):
+#             # Pooling
+#             cutout = (self.av_pool(input) + self.max_pool(input))/2
+
+#             if mask_indexes is not None:
+#                 cutout[0][mask_indexes] = 0.0 # 0.5
+
+#             if global_aspect_width != 1:
+#                 if global_aspect_width > 1:
+#                     cutout = kornia.geometry.transform.rescale(cutout, (1, global_aspect_width))
+#                 else:
+#                     cutout = kornia.geometry.transform.rescale(cutout, (1/global_aspect_width, 1))
+
+#             # if cur_iteration % 50 == 0 and _ == 0:
+#             #     print(cutout.shape)
+#             #     TF.to_pil_image(cutout[0].cpu()).save(f"cutout_im_{cur_iteration:02d}_{spot}.png")
+
+#             cutouts.append(cutout)
+
+#         if self.transforms is not None:
+#             # print("Cached transforms available")
+#             batch1 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[:self.cutn_zoom], dim=0), self.transforms[:self.cutn_zoom],
+#                 (self.cut_size, self.cut_size), padding_mode=global_padding_mode)
+#             batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
+#                 (self.cut_size, self.cut_size), padding_mode='zeros')
+#             batch = torch.cat([batch1, batch2])
+#             # if cur_iteration < 2:
+#             #     for j in range(4):
+#             #         TF.to_pil_image(batch[j].cpu()).save(f"cached_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+#             #         j_wide = j + self.cutn_zoom
+#             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+#         else:
+#             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
+#             batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
+#             # print(batch1.shape, batch2.shape)
+#             batch = torch.cat([batch1, batch2])
+#             # print(batch.shape)
+#             self.transforms = torch.cat([transforms1, transforms2])
+#             ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
+#             # if cur_iteration < 2:
+#             #     for j in range(4):
+#             #         TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+#             #         j_wide = j + self.cutn_zoom
+#             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+
+#         # print(batch.shape, self.transforms.shape)
+        
+#         if self.noise_fac:
+#             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
+#             batch = batch + facs * torch.randn_like(batch)
+#         return batch
+
+
 class MakeCutouts(nn.Module):
-    #made spicier lol
     def __init__(self, cut_size, cutn, cut_pow=1.):
         global global_aspect_width
 
@@ -415,50 +541,38 @@ class MakeCutouts(nn.Module):
         self.cut_size = cut_size
         self.cutn = cutn
         self.cutn_zoom = int(2*cutn/3)
-        cut_pow = float(cut_pow)
         self.cut_pow = cut_pow
         self.transforms = None
 
-        randomcroppadding = {
-            "reflection":"reflect",
-            "border":"reflect", #bug here, kornia issue
-        }
-
-        randomaffinepadding = {
-            "reflection":2,
-            "border":1,
-        }
-
         augmentations = []
         if global_aspect_width != 1:
-            augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", padding_mode=randomcroppadding[global_padding_mode], return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.40*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
-        # augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(max(0.1-0.1*(cut_pow-1),0.01),0.75*cut_pow),  ratio=(max(0.85-0.85*(cut_pow-1),0.1),1.2+1.2*cut_pow), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
-        augmentations.append(MyRandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.95,1.75),  ratio=(0.75,1.3), cropping_mode='resample', p=min(0.7*cut_pow,1), return_transform=True))
-        augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
+            augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
+        augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
         augmentations = []
-        # if global_aspect_width == 1:
-        n_s = 0.90
-        n_t = (1-n_s)/2
-        augmentations.append(K.RandomAffine(degrees=20, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
-        # elif global_aspect_width > 1:
-        #     n_s = 1/global_aspect_width
-        #     n_t = (1-n_s)/2
-        #     augmentations.append(K.RandomAffine(degrees=30, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
-        # else:
-        #     n_s = global_aspect_width
-        #     n_t = (1-n_s)/2
-        #     augmentations.append(K.RandomAffine(degrees=30, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0,padding_mode=randomaffinepadding[global_padding_mode], return_transform=True))
+        if global_aspect_width == 1:
+            n_s = 0.95
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0, return_transform=True))
+        elif global_aspect_width > 1:
+            n_s = 1/global_aspect_width
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
+        else:
+            n_s = global_aspect_width
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
 
         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(MyCenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.30*cut_pow, p=min(0.7*cut_pow,1), return_transform=True))
-        augmentations.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=min(0.6*cut_pow,1), return_transform=True))
+        augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
+        augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
         self.augs_wide = nn.Sequential(*augmentations)
 
-        self.noise_fac = 0.15
+        self.noise_fac = 0.1
         
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
