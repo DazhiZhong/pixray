@@ -59,7 +59,7 @@ class InstallPixray(install):
         install.run(self)
         # path = os.getcwd().replace(" ", "\ ").replace("(","\(").replace(")","\)") + "/bin/"
         os.system("git clone https://github.com/pixray/diffvg && cd diffvg && git submodule update --init --recursive && DIFFVG_CUDA=1 python setup.py install")
-        os.system("git clone https://github.com/dazhizhong/v-diffusion-pytorch -b addcolabs")
+        os.system("git clone https://github.com/dazhizhong/v-diffusion-pytorch")
         print("installing git dependencies")
         os.system(f"pip install -r {requirementPath}")
 

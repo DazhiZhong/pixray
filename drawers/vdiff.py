@@ -116,7 +116,8 @@ class VdiffDrawer(DrawingInterface):
         self.steps = utils.get_spliced_ddpm_cosine_schedule(self.t)
         # [model, steps, eta, extra_args, ts, alphas, sigmas]
         self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
-
+        print(self.t.size(), self.steps.size())
+        print(type(init_tensor))
         if init_tensor is not None:
             self.steps = self.steps[self.steps < 0.9]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps)
