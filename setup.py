@@ -48,8 +48,7 @@ def parse(reqstr):
 
     return lines
 
-folder_path = os.path.dirname(os.path.realpath(__file__))
-requirementPath = folder_path + '/requirements.txt'
+requirementPath =  'requirements.txt'
 install_requires = []
 if os.path.isfile(requirementPath):
     with open(requirementPath) as f:
