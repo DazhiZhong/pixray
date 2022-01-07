@@ -144,6 +144,9 @@ class VdiffDrawer(DrawingInterface):
     def synth(self, cur_iteration):
         print("synth,",cur_iteration)
         pred, v, next_x = sampling.sample_step(self.sample_state, self.x, cur_iteration, self.pred, self.v)
+        save_image(self.x, f'x_{cur_iteration}.png')
+        save_image(pred, f'pred_{cur_iteration}.png')
+        save_image(v, f'v_{cur_iteration}.png')
         self.pred = pred.detach()
         self.v = v.detach()
         pixels = clamp_with_grad(pred.add(1).div(2), 0, 1)
