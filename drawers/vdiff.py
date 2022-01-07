@@ -121,7 +121,7 @@ class VdiffDrawer(DrawingInterface):
             self.steps = self.steps[self.steps < 0.9]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps[0])
             self.x = init_tensor * alpha + self.x * sigma
-
+        print(self.steps)
         self.sample_state[5], self.sample_state[6] = alpha, sigma
         self.x.requires_grad_(True)
         self.pred = None 
