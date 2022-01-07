@@ -7,6 +7,7 @@ import gc
 import subprocess
 import json
 import glob
+from pathlib import Path
 from braceexpand import braceexpand
 from types import SimpleNamespace
 import os.path
@@ -903,9 +904,9 @@ def do_init(args):
         elif 'json' in f1:
             infile = f1
         else:
-            infile = f"vectors/{f1}.json"
+            infile = f"{MODULE_DIR}/vectors/{f1}.json"
             if not os.path.exists(infile):
-                infile = f"pixray/vectors/{f1}.json"
+                infile = f"{MODULE_DIR}/pixray/vectors/{f1}.json"
         if infile:
             with open(infile) as f_in:
                 vect_table = json.load(f_in)
@@ -1080,6 +1081,9 @@ device=None
 
 #loss globals
 lossGlobals = {}
+
+MODULE_DIR = Path(__file__).resolve().parent
+print("module directory in", MODULE_DIR)
 
 # on re-runs this should reset most important globals
 def reset_session_globals():

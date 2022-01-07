@@ -12,6 +12,7 @@ import torch
 from torch.nn import functional as F
 from torchvision.transforms import functional as TF
 import math
+from torchvision.utils import save_image
 
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
@@ -118,6 +119,7 @@ class VdiffDrawer(DrawingInterface):
         # [model, steps, eta, extra_args, ts, alphas, sigmas]
         self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
         if self.init_image is not None:
+            save_image(init_tensor, 'imageout.png')
             self.steps = self.steps[self.steps < 0.9]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps)
             self.x = init_tensor * alpha[0] + self.x * sigma[0]
