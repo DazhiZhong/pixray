@@ -120,7 +120,7 @@ class VdiffDrawer(DrawingInterface):
         self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
         if self.init_image is not None:
             save_image(init_tensor, 'imageout.png')
-            self.steps = self.steps[self.steps < 0.9]
+            self.steps = self.steps[self.steps < 0.8]
             alpha, sigma = utils.t_to_alpha_sigma(self.steps)
             self.x = init_tensor * alpha[0] + self.x * sigma[0]
             self.sample_state[5], self.sample_state[6] = alpha, sigma
@@ -138,9 +138,11 @@ class VdiffDrawer(DrawingInterface):
         return None
 
     def makenoise(self, cur_it):
+        print("noise,",cur_it)
         return sampling.sample_noise(self.sample_state, self.x, cur_it, self.pred, self.v).detach()
 
     def synth(self, cur_iteration):
+        print("synth,",cur_iteration)
         pred, v, next_x = sampling.sample_step(self.sample_state, self.x, cur_iteration, self.pred, self.v)
         self.pred = pred.detach()
         self.v = v.detach()
