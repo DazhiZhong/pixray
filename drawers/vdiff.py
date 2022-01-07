@@ -95,12 +95,12 @@ class VdiffDrawer(DrawingInterface):
         self.device = device
         self.pred = None
         self.v = None
-        self.x = torch.randn([1, 3, self.gen_height, self.gen_width], device=self.device)
-        self.x.requires_grad_(True)
-        self.t = torch.linspace(1, 0, self.iterations+2, device=self.device)[:-1]
-        self.steps = utils.get_spliced_ddpm_cosine_schedule(self.t)
-
-        self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
+        # self.x = torch.randn([1, 3, self.gen_height, self.gen_width], device=self.device)
+        # self.x.requires_grad_(True)
+        # self.t = torch.linspace(1, 0, self.iterations+2, device=self.device)[:-1]
+        # self.steps = utils.get_spliced_ddpm_cosine_schedule(self.t)
+        # # [model, steps, eta, extra_args, ts, alphas, sigmas]
+        # self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
 
 
     def get_opts(self, decay_divisor):
@@ -111,9 +111,18 @@ class VdiffDrawer(DrawingInterface):
         return None
 
     def init_from_tensor(self, init_tensor):
-        # self.z, *_ = self.model.encode(init_tensor)        
-        # self.z.requires_grad_(True)
-        next_x = torch.randn([1, 3, self.gen_height, self.gen_width], device=self.device)
+        self.x = torch.randn([1, 3, self.gen_height, self.gen_width], device=self.device)
+        self.t = torch.linspace(1, 0, self.iterations+2, device=self.device)[:-1]
+        self.steps = utils.get_spliced_ddpm_cosine_schedule(self.t)
+        # [model, steps, eta, extra_args, ts, alphas, sigmas]
+        self.sample_state = sampling.sample_setup(self.model, self.x, self.steps, self.eta, {})
+
+        if init_tensor is not None:
+            self.steps = self.steps[self.steps < 0.9]
+            alpha, sigma = utils.t_to_alpha_sigma(self.steps[0])
+            self.x = init_tensor * alpha + self.x * sigma
+
+        self.sample_state[5], self.sample_state[6] = alpha, sigma
         self.x.requires_grad_(True)
         self.pred = None 
         self.v = None 
