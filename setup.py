@@ -75,7 +75,6 @@ setup(
         'kornia',
         'omegaconf',
         'torch_optimizer',
-        'perlin_numpy'
     ],
     classifiers=[],
     cmdclass={'install': InstallPixray},
