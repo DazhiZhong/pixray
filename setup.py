@@ -3,12 +3,6 @@ from setuptools.command.install import install
 import os, warnings
 
 def parse(reqstr):
-    """
-    Parse a requirements file into a list of Requirements
-    See: pip/req.py:parse_requirements()
-    :param reqstr: a string or file like object containing requirements
-    :returns: a *generator* of Requirement objects
-    """
     filename = getattr(reqstr, 'name', None)
 
     # Python 3.x only
@@ -59,8 +53,8 @@ class InstallPixray(install):
         install.run(self)
         # path = os.getcwd().replace(" ", "\ ").replace("(","\(").replace(")","\)") + "/bin/"
         os.system("git clone https://github.com/pixray/diffvg && cd diffvg && git submodule update --init --recursive && DIFFVG_CUDA=1 python setup.py install")
-        os.system("git clone https://github.com/dazhizhong/v-diffusion-pytorch")
-        os.system("cp -r v-diffusion-pytorch/diffusion pixray/.")
+        os.system("git clone --recursive https://github.com/dazhizhong/v-diffusion-pytorch ")
+        # os.system("cp -r v-diffusion-pytorch/diffusion pixray/.")
         print("installing git dependencies")
         os.system(f"pip install -r {requirementPath}")
 
