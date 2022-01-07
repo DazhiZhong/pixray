@@ -2305,6 +2305,11 @@ def release():
     torch.cuda.empty_cache()
     gc.collect()
 
+def run(prompts, drawer, **kwargs):
+    reset_settings()
+    settings = apply_settings(prompts=prompts, drawer=drawer, **kwargs)    
+    do_init(settings)
+    do_run(settings)
 
 if __name__ == '__main__':
     main()
