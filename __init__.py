@@ -1,1 +1,1 @@
-import pixray
+from pixray import *
