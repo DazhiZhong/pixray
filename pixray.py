@@ -100,7 +100,7 @@ if import_diffvg_drawers:
         "dot": DotDrawer,
     })
 else:
-    print("--> Not running with pydiffvg drawer support ", e)
+    print("--> Not running with pydiffvg drawer support ")
 
 
 try:
