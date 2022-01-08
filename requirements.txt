@@ -34,7 +34,8 @@ git+https://github.com/pvigier/perlin-numpy@6f077f8
 # DO THIS: "git clone https://github.com/pixray/diffvg && cd diffvg && git submodule update --init --recursive && CMAKE_PREFIX_PATH=$(pyenv prefix) DIFFVG_CUDA=1 python setup.py install"
 cmake==3.21.3
 cssutils==2.3.0
-svgpathtools==1.4.2
+svgpathtools==1.4.4
+svgwrite==1.4.1
 
 
 # fft: these are IN ADDITION to the core requirements_vqgan.txt
@@ -48,4 +49,4 @@ git+https://github.com/fbcotter/pytorch_wavelets
 # main aphantasia library
 git+https://github.com/pixray/aphantasia@7e6b3bb
 
-svgwrite
+
