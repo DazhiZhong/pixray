@@ -64,7 +64,7 @@ setup(
     description='text-to-image neural generation engine',
     url='https://github.com/dazhizhong/pixray',
     author='Dazhi Zhong, dribnet',
-    packages=[".","pydiffvg"]+find_packages(),
+    packages=["."]+find_packages(),
     install_requires=install_requires,
     classifiers=[],
     cmdclass={'install': InstallPixray},
