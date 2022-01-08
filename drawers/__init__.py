@@ -1,12 +1,12 @@
 from .vqgan import VqganDrawer
 from .vdiff import VdiffDrawer
 from .fftdrawer import FftDrawer
-import_diffvg_drawers = False
+import_diffvg_drawers = True
 try:
     import pydiffvg
     import diffvg
 except Exception as e:
-    import_diffvg_drawers = True
+    import_diffvg_drawers = False
 if import_diffvg_drawers:
     from .clipdrawer import ClipDrawer
     from .pixeldrawer import PixelDrawer

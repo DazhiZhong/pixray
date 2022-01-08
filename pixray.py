@@ -80,12 +80,12 @@ except ImportError as e:
     print("--> Not running with fft support", e)
     pass
 
-import_diffvg_drawers = False
+import_diffvg_drawers = True
 try:
     import pydiffvg
     import diffvg
 except Exception as e:
-    import_diffvg_drawers = True
+    import_diffvg_drawers = False
 
 if import_diffvg_drawers:
     from drawers.clipdrawer import ClipDrawer
