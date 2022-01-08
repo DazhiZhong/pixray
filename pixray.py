@@ -80,7 +80,14 @@ except ImportError as e:
     print("--> Not running with fft support", e)
     pass
 
+import_diffvg_drawers = False
 try:
+    import pydiffvg
+    import diffvg
+except Exception as e:
+    import_diffvg_drawers = True
+
+if import_diffvg_drawers:
     from drawers.clipdrawer import ClipDrawer
     from drawers.pixeldrawer import PixelDrawer
     from drawers.linedrawer import LineDrawer
@@ -92,9 +99,9 @@ try:
         "clipdraw": ClipDrawer,
         "dot": DotDrawer,
     })
-except ImportError as e:
+else:
     print("--> Not running with pydiffvg drawer support ", e)
-    pass
+
 
 try:
     import matplotlib.colors
