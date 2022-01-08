@@ -1344,7 +1344,8 @@ def checkin(args, iter, losses):
                 clear_output()
             display.display(display.Image(outfile))
     print("writing to: ", args.output)
-    callback_function(args)
+    if callback_function is not None:
+        callback_function(args)
     tqdm.write(writestr)
 
 def ascend_txt(args):
@@ -2249,7 +2250,7 @@ def dostrotss(out, opt, drawer, iters, args):
     result.save(args.style_output)
     # print(f'Done in {time.time()-start:.3f}s')
 
-callback_function = lambda x: x
+callback_function = None
 def add_callback(f):
     global callback_function
     callback_function = f
