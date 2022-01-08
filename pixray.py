@@ -2307,7 +2307,8 @@ def release():
 
 def run(prompts, drawer, **kwargs):
     reset_settings()
-    settings = apply_settings(prompts=prompts, drawer=drawer, **kwargs)    
+    add_settings(prompts=prompts, drawer=drawer, **kwargs)
+    settings = apply_settings()    
     do_init(settings)
     do_run(settings)
 
