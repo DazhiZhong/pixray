@@ -13,4 +13,4 @@ if import_diffvg_drawers:
     from .dotdrawer import DotDrawer
     from .linedrawer import LineDrawer
 else:
-    print("no diffvg support")
+    print("no diffvg support, restart runtime if you want to use pixel drawer")
